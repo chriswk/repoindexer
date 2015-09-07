@@ -12,7 +12,7 @@ object ApplicationMain extends App {
 
   val projects = system.actorOf(Props[StashProjectsActor])
 
-  projects ! GetProjects(baseUrl)
+  projects ! GetProjects()
 
   system.awaitTermination()
 }
