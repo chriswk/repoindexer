@@ -14,6 +14,7 @@ lazy val root = (project in file(".")).
 
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % "2.3.11",
+  "com.typesafe.akka" %% "akka-testkit" % "2.3.11",
   "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",
   "com.sksamuel.elastic4s" %% "elastic4s-core" % "1.7.0",
   "com.typesafe" % "config" % "1.3.0",
