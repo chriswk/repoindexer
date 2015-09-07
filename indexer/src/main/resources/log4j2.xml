@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- For FINN's way of logging see https://confluence.finn.no/display/TEKK/Best+practices+for+Logging -->
+    <appenders>
+        <Console name="STDOUT" target="SYSTEM_OUT">
+            <PatternLayout pattern="[%5p] %d{HH:mm:ss}  %m %x%n"/>
+        </Console>
+    </appenders>
+    <loggers>
+        <logger name="no.finn" level="info"/>
+        <root level="debug">
+            <appender-ref ref="STDOUT"/>
+        </root>
+    </loggers>
+</configuration>
