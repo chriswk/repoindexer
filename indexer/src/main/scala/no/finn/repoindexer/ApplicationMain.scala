@@ -10,9 +10,9 @@ object ApplicationMain extends App {
   val system = ActorSystem("RepoIndexer")
   val baseUrl = config.getString("stash.url")
 
-  val projects = system.actorOf(Props[StashProjectsActor])
+  val stashProjects = system.actorOf(Props[StashProjectsActor])
 
-  projects ! GetProjects()
+  stashProjects ! GetProjects
 
   system.awaitTermination()
 }
