@@ -4,13 +4,7 @@ version := "1.0"
 
 scalaVersion := "2.11.7"
 
-lazy val root = (project in file(".")).
-  enablePlugins(BuildInfoPlugin).settings(
-    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
-    buildInfoPackage := "no.finntech.repoindexer",
-    buildInfoObject := "BuildInfo"
-  )
-  net.virtualvoid.sbt.graph.Plugin.graphSettings
+net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % "2.3.11",

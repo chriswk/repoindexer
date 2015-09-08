@@ -1,13 +1,13 @@
 package no.finn.repoindexer.actors
 
-import akka.actor.{Props, ActorLogging, Actor}
-import dispatch._, Defaults._
-import scala.util.{Success, Failure}
-
-import no.finn.repoindexer.{RepoResponse, CloneRepo, GetRepositories}
+import akka.actor.{Actor, ActorLogging, Props}
+import dispatch.Defaults._
+import dispatch._
+import no.finn.repoindexer.{CloneRepo, GetRepositories, RepoResponse}
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
-import org.json4s.JsonDSL._
+
+import scala.util.{Failure, Success}
 
 class StashRepositoryActor extends Actor with ActorLogging with StashActor {
   def cloner = context.actorOf(Props[StashCloneActor])
@@ -21,7 +21,14 @@ class StashRepositoryActor extends Actor with ActorLogging with StashActor {
       repos onComplete {
         case Success(content) => {
           content.extract[RepoResponse].values.foreach { repo =>
-            cloner ! CloneRepo(repo.cloneUrl.replaceAll(userName, "").replaceAll("@", ""), repo.slug)
+            val url = repo.links("clone").find(l => l.name match {
+              case Some(name) => name == "ssh"
+              case None => false
+            })
+            url match {
+              case Some(url) => cloner ! CloneRepo(url, repo.slug)
+              case None =>
+            }
           }
         }
         case Failure(t) => log.info("Something went wrong")
@@ -29,3 +36,4 @@ class StashRepositoryActor extends Actor with ActorLogging with StashActor {
     }
   }
 }
+

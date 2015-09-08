@@ -14,8 +14,7 @@ class StashProjectsActor extends Actor with ActorLogging with StashActor {
   val projectsUrl = apiPath / "projects"
   def receive = {
     case GetProjects => {
-      val response = authenticatedRequest(projectsUrl).map(c => parse(c))
-      response onComplete {
+      authenticatedRequest(projectsUrl).map(parse(_)) onComplete {
         case Success(content) => {
           content.extract[ProjectResponse].values.foreach { project =>
             repoActor ! GetRepositories(project.key, project.link.url)
