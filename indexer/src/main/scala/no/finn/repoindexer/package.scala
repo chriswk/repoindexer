@@ -1,5 +1,7 @@
 package no.finn
 
+import java.io.File
+
 import org.json4s.JsonAST.{JArray, JField}
 import org.json4s.{CustomSerializer, JObject}
 
@@ -7,6 +9,7 @@ package object repoindexer {
   case object GetProjects
   case class GetRepositories(projectKey: String, link: String)
   case class CloneRepo(sshClone: StashLink, slug: String)
+  case class IndexRepo(path: File)
   case class Project(key: String, id: Long, name: String, public: Boolean, link: Link)
   case class Link(url: String, rel: String)
   case class ProjectResponse(values: List[Project])
