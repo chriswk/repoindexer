@@ -10,7 +10,7 @@ import scala.annotation.tailrec
 class ProjectReaderActor extends Actor with ActorLogging {
   val elasticsearchActor = context.actorOf(Props[ElasticSearchActor])
 
-  private val includeExtensions = Seq(".java", ".scala", ".xml")
+  private val includeExtensions = Seq(".java", ".scala", ".xml", ".md", ".groovy", ".gradle", ".sbt")
   private def shouldIndex(file: File) = includeExtensions.exists(extension => file.getPath.endsWith(extension))
 
   def receive = {
