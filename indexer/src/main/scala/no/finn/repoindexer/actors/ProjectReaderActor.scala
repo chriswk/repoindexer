@@ -14,12 +14,12 @@ class ProjectReaderActor extends Actor with ActorLogging {
   private def shouldIndex(file: File) = includeExtensions.exists(extension => file.getPath.endsWith(extension))
 
   def receive = {
-    case IndexRepo(path) =>
+    case IndexRepo(path, repoName) =>
       log.info("Indexing repo at "+path)
       val files = listFiles(path)
       files.collect {
         case file if shouldIndex(file) =>
-          elasticsearchActor ! IndexFile(file)
+          elasticsearchActor ! IndexFile(file, repoName)
       }
   }
 

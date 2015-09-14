@@ -29,14 +29,22 @@ class StashCloneActor extends Actor with ActorLogging with StashActor {
 
     }
   }
+  val transportConfig = new TransportConfigCallback() {
+    override def configure(transport: Transport): Unit = {
+      val sshTransport = transport.asInstanceOf[SshTransport]
+      sshTransport.setSshSessionFactory(sshSessionFactory)
+    }
+  }
   val sshSessionFactory = new CustomConfigSessionFactory()
   def receive = {
     case CloneRepo(cloneUrl, slug) => {
       val localPath = new File(localRepoFolder, slug)
       if(localPath.exists) {
-        log.info("The git repository is already cloned.")
-        new Git(new FileRepository(new File(localPath + "/.git"))).pull().call()
-        log.info(s"Done pulling $localPath")
+        val pullResult = new Git(new FileRepository(new File(localPath, ".git")))
+            .pull()
+            .setTransportConfigCallback(transportConfig)
+            .call()
+
       } else {
         localPath.mkdirs()
         val url = cloneUrl.href
@@ -45,19 +53,14 @@ class StashCloneActor extends Actor with ActorLogging with StashActor {
             .cloneRepository()
             .setURI(url)
             .setDirectory(localPath)
-            .setTransportConfigCallback(new TransportConfigCallback() {
-            override def configure(transport: Transport): Unit = {
-              val sshTransport = transport.asInstanceOf[SshTransport]
-              sshTransport.setSshSessionFactory(sshSessionFactory)
-            }
-          })
+            .setTransportConfigCallback(transportConfig)
             .call()
           )
         } {
           log.info(s"Done cloning ${repo.getRepository.getDirectory}")
         }
       }
-      reader ! IndexRepo(localPath)
+      reader ! IndexRepo(localPath, slug)
     }
   }
 }

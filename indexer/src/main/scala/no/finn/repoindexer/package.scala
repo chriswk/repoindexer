@@ -9,8 +9,8 @@ package object repoindexer {
   case object GetProjects
   case class GetRepositories(projectKey: String, link: String)
   case class CloneRepo(sshClone: StashLink, slug: String)
-  case class IndexRepo(path: File)
-  case class IndexFile(file: File)
+  case class IndexRepo(path: File, slug: String)
+  case class IndexFile(file: File, slug: String)
   case class Project(key: String, id: Long, name: String, public: Boolean, link: Link)
   case class Link(url: String, rel: String)
   case class ProjectResponse(values: List[Project])
