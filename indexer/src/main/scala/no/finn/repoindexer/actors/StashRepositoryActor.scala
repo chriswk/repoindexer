@@ -10,7 +10,7 @@ import org.json4s.jackson.JsonMethods._
 import scala.util.{Failure, Success}
 
 class StashRepositoryActor extends Actor with ActorLogging with StashActor {
-  def cloner = context.actorOf(Props[StashCloneActor])
+  def cloner = context.actorOf(Props[CloneMaster], "clone-master")
 
 
   def receive = {
