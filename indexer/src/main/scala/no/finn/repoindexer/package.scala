@@ -16,6 +16,7 @@ package object repoindexer {
   case class ProjectResponse(values: List[Project])
   case class RepoResponse(values: List[StashRepo])
   case class StashLink(href: String, name: Option[String])
+  case class ProjectInfo(key: String, url: String)
 //  case class StashLinks(self: List[StashLink], `clone`: List[StashLink])
   case class StashRepo(slug: String, name: String, cloneUrl: String, links: Map[String, List[StashLink]])
 

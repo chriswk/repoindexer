@@ -7,8 +7,9 @@ scalaVersion := "2.11.7"
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-actor" % "2.3.11",
-  "com.typesafe.akka" %% "akka-testkit" % "2.3.11",
+  "com.typesafe.akka" %% "akka-actor" % "2.4.0",
+  "com.typesafe.akka" %% "akka-testkit" % "2.4.0",
+  "com.typesafe.akka" %% "akka-stream-experimental" % "1.0",
   "net.ceedubs" %% "ficus" % "1.1.2",
   "com.jsuereth" %% "scala-arm" % "1.4",
   "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",
