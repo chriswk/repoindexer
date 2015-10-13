@@ -5,6 +5,7 @@ version := "1.0"
 scalaVersion := "2.11.7"
 
 val akkaVersion = "2.4.0"
+val elastic4sVersion = "1.7.4"
 
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
@@ -15,13 +16,14 @@ libraryDependencies ++= Seq(
   "net.ceedubs" %% "ficus" % "1.1.2",
   "com.jsuereth" %% "scala-arm" % "1.4",
   "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",
-  "com.sksamuel.elastic4s" %% "elastic4s-core" % "1.7.4",
+  "com.sksamuel.elastic4s" %% "elastic4s-core" % elastic4sVersion,
+  "com.sksamuel.elastic4s" %% "elastic4s-streams" % elastic4sVersion,
   "com.typesafe" % "config" % "1.3.0",
   "org.json4s" %% "json4s-jackson" % "3.2.11",
-  "org.apache.logging.log4j" % "log4j-api" % "2.3",
-  "org.apache.logging.log4j" % "log4j-core" % "2.3",
-  "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.3",
-  "org.apache.logging.log4j" % "log4j-jul" % "2.3",
+  "org.apache.logging.log4j" % "log4j-api" % "2.4",
+  "org.apache.logging.log4j" % "log4j-core" % "2.4",
+  "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.4",
+  "org.apache.logging.log4j" % "log4j-jul" % "2.4",
   "org.eclipse.jgit" % "org.eclipse.jgit" % "4.0.1.201506240215-r",
   "com.github.javaparser" % "javaparser-core" % "2.2.2",
   "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",

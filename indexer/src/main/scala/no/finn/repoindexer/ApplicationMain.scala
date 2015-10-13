@@ -3,6 +3,7 @@ package no.finn.repoindexer
 import java.io.{FileInputStream, File}
 import com.github.javaparser.JavaParser
 import com.github.javaparser.ast.CompilationUnit
+import com.ning.http.client.RequestBuilder
 import com.sksamuel.elastic4s.ElasticDsl.index
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
@@ -13,6 +14,8 @@ import akka.stream.scaladsl._
 import com.jcraft.jsch.{Session, JSch}
 import com.sksamuel.elastic4s.{ElasticsearchClientUri, ElasticClient}
 import dispatch._
+import no.finn.repoindexer
+import no.finn.repoindexer.IndexRepo
 import org.apache.logging.log4j.{LogManager, Logger}
 import org.eclipse.jgit.api.{TransportConfigCallback, Git}
 import org.eclipse.jgit.internal.storage.file.FileRepository
@@ -101,6 +104,10 @@ object ApplicationMain {
     projectListSource.mapConcat(identity)
   }
 
+  val repoReqFlow : Flow[Project, Req, Unit] = Flow[Project].map { project =>
+    apiPath / "projects" / project.key / "repos"
+  }
+
   val repoReqSource : Source[Req, Unit] = {
     projectUrlSource.map { project =>
       apiPath / "projects" / project.key / "repos"
@@ -108,19 +115,40 @@ object ApplicationMain {
   }
 
 
+  val repoListFlow : Flow[Req, List[StashRepo], Unit] = Flow[Req].mapAsync(2) { r =>
+    println(s"${r.url}")
+    authenticatedRequest(r)
+      .map(parse(_))
+      .map(data => data.extract[RepoResponse].values)
+  }
+
   val repoListSource : Source[List[StashRepo], Unit] = {
     repoReqSource.mapAsync(2)(r => {
+      println(s"${r.url}")
       authenticatedRequest(r)
         .map(parse(_))
         .map(data => data.extract[RepoResponse].values)
     })
   }
 
+  val repoFlow : Flow[List[StashRepo], StashRepo, Unit] = Flow[List[StashRepo]].mapConcat { identity }
+
   val repoSource : Source[StashRepo, Unit]= {
-    repoListSource.mapConcat(p => p.map(f => f))
+    repoListSource.mapConcat { identity }
   }
 
-  val cloneUrls : Source [CloneRepo, Unit] = {
+  val cloneFlow : Flow[StashRepo, CloneRepo, Unit] = Flow[StashRepo].map { repo =>
+    val url = repo.links("clone").find(l => l.name match {
+      case Some(name) => name == "ssh"
+      case None => false
+    })
+    url match {
+      case Some(link) => CloneRepo(Some(link), repo.slug)
+      case None => CloneRepo(None, repo.slug)
+    }
+  }
+
+  val cloneUrls : Source[CloneRepo, Unit] = {
     repoSource.map { repo =>
       val url = repo.links("clone").find(l => l.name match {
         case Some(name) => name == "ssh"
@@ -133,14 +161,51 @@ object ApplicationMain {
     } filter { r => r.sshClone.isDefined }
   }
 
+  val clonerFlow : Flow[CloneRepo, IndexRepo, Unit] = Flow[CloneRepo].mapAsync(4) { repo =>
+    repo.sshClone match {
+      case Some(cloneUrl) => {
+        val localPath = new File(localRepoFolder, repo.slug)
+        Future {
+          if (localPath.exists) {
+            println(s"Pulling ${repo}")
+            val pullResult = new Git(new FileRepository(new File(localPath, ".git")))
+              .pull()
+              .setTransportConfigCallback(transportConfig)
+              .setProgressMonitor(progressMonitor)
+              .call()
+
+          } else {
+            localPath.mkdirs()
+            val url = cloneUrl.href
+            println(s"Cloning ${repo}")
+            for {
+              repo <- managed(Git
+                .cloneRepository()
+                .setURI(url)
+                .setDirectory(localPath)
+                .setTransportConfigCallback(transportConfig)
+                .setProgressMonitor(progressMonitor)
+                .call()
+              )
+            } {
+
+            }
+          }
+          IndexRepo(localPath, repo.slug)
+        }
+      }
+      case None => Future.failed(new IllegalStateException("No cloneurl"))
+    }
+  }
+
   val cloner: Source[IndexRepo, Unit] = {
     cloneUrls.mapAsync(4)(c => {
-      println(c)
       c.sshClone match {
         case Some(cloneUrl) => {
           val localPath = new File(localRepoFolder, c.slug)
           Future {
             if (localPath.exists) {
+              println(s"Pulling ${c}")
               val pullResult = new Git(new FileRepository(new File(localPath, ".git")))
                 .pull()
                 .setTransportConfigCallback(transportConfig)
@@ -150,6 +215,7 @@ object ApplicationMain {
             } else {
               localPath.mkdirs()
               val url = cloneUrl.href
+              println(s"Cloning ${c}")
               for {
                 repo <- managed(Git
                   .cloneRepository()
@@ -171,6 +237,14 @@ object ApplicationMain {
     })
   }
 
+  val indexFilesFlow : Flow[IndexRepo, IndexFile, Unit] = {
+    Flow[IndexRepo].map { repo =>
+      listFiles(repo.path).map { f =>
+        IndexFile(f, repo.slug)
+      }
+    } filter { f => shouldIndex(f.file) }
+  }
+
   val filesToIndex : Source[IndexFile, Unit] = {
     cloner.mapConcat(idxRepo => {
       listFiles(idxRepo.path).map { f =>
@@ -181,6 +255,15 @@ object ApplicationMain {
     }
   }
 
+  val identifyFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
+    Flow[IndexFile].map { file =>
+      if (file.file.getName.endsWith(".java")) {
+        IndexCandidate(file, FileType.JAVA)
+      } else {
+        IndexCandidate(file, FileType.OTHER)
+      }
+    }
+  }
   val fileIdentifier : Source[IndexCandidate, Unit] = {
     filesToIndex.map { f => {
       if (f.file.getName.endsWith(".java")) {
