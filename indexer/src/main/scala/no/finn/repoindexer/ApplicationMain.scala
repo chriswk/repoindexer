@@ -14,8 +14,6 @@ import akka.stream.scaladsl._
 import com.jcraft.jsch.{Session, JSch}
 import com.sksamuel.elastic4s.{ElasticsearchClientUri, ElasticClient}
 import dispatch._
-import no.finn.repoindexer
-import no.finn.repoindexer.IndexRepo
 import org.apache.logging.log4j.{LogManager, Logger}
 import org.eclipse.jgit.api.{TransportConfigCallback, Git}
 import org.eclipse.jgit.internal.storage.file.FileRepository
@@ -79,13 +77,18 @@ object ApplicationMain {
   implicit val formats = DefaultFormats
 
   def authenticatedRequest(url: Req) = {
-    Http(url.as_!(userName, password) OK as.String)
+    val req = url.as_!(userName, password)
+      .setContentType("application/json", "utf-8")
+      .addQueryParameter("limit", "1000")
+    println(s"Requesting ${req.url}")
+    Http(req OK as.String)
   }
   val stringFlow = Flow[String].map(s => s + "_postfix")
 
   def run(s: Source[List[Project], Unit]): Unit = {
     implicit lazy val system = ActorSystem("RepoIndexer")
     implicit val materializer = ActorMaterializer()
+
     s.runWith(Sink.foreach(println(_))).onComplete {
       _ => system.terminate()
     }
@@ -99,6 +102,7 @@ object ApplicationMain {
     Source(r)
   }
 
+  val projectUrlFlow:Flow[List[Project], Project, Unit] = Flow[List[Project]].mapConcat { identity }
 
   val projectUrlSource: Source[Project, Unit] = {
     projectListSource.mapConcat(identity)
@@ -242,7 +246,7 @@ object ApplicationMain {
       listFiles(repo.path).map { f =>
         IndexFile(f, repo.slug)
       }
-    } filter { f => shouldIndex(f.file) }
+    } mapConcat{ identity }
   }
 
   val filesToIndex : Source[IndexFile, Unit] = {
@@ -272,7 +276,15 @@ object ApplicationMain {
         IndexCandidate(f, FileType.OTHER)
       }
     }}
+
   }
+
+  val fileFlow = projectListSource
+      .via(projectUrlFlow)
+      .via(repoReqFlow)
+      .via(repoListFlow)
+      .via(repoFlow)
+      .via(cloneFlow)
 
 
   def getCompilationUnit(is: java.io.InputStream): Try[CompilationUnit] = Try {
