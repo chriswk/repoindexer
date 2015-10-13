@@ -2,13 +2,14 @@ package no.finn
 
 import java.io.File
 
+import no.finn.repoindexer.FileType.FileType
 import org.json4s.JsonAST.{JArray, JField}
 import org.json4s.{CustomSerializer, JObject}
 
 package object repoindexer {
   case object GetProjects
   case class GetRepositories(projectKey: String, link: String)
-  case class CloneRepo(sshClone: StashLink, slug: String)
+  case class CloneRepo(sshClone: Option[StashLink], slug: String)
   case class IndexRepo(path: File, slug: String)
   case class IndexFile(file: File, slug: String)
   case class Project(key: String, id: Long, name: String, public: Boolean, link: Link)
@@ -19,7 +20,12 @@ package object repoindexer {
   case class ProjectInfo(key: String, url: String)
 //  case class StashLinks(self: List[StashLink], `clone`: List[StashLink])
   case class StashRepo(slug: String, name: String, cloneUrl: String, links: Map[String, List[StashLink]])
-
+  case class IndexCandidate(ifile: IndexFile, fileType: FileType)
   type Projects = Seq[Project]
+
+  object FileType extends Enumeration {
+    type FileType = Value
+    val JAVA, OTHER = Value
+  }
 
 }
