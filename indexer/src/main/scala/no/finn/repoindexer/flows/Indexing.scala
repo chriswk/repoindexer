@@ -2,18 +2,23 @@ package no.finn.repoindexer.flows
 
 import java.io.File
 
-import com.sksamuel.elastic4s.{ElasticClient, ElasticsearchClientUri}
+import akka.stream.io.Framing
+import akka.util.ByteString
+import com.github.javaparser.JavaParser
+import com.github.javaparser.ast.{ImportDeclaration, CompilationUnit}
+import com.sksamuel.elastic4s.streams.RequestBuilder
+import com.sksamuel.elastic4s.{ElasticsearchClientUri, BulkCompatibleDefinition, ElasticClient, ElasticDsl}
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
-
+import no.finn.repoindexer.FileType._
+import com.sksamuel.elastic4s.streams.ReactiveElastic._
 import no.finn.repoindexer.{FileType, IndexCandidate, IndexFile, IndexRepo}
 import org.apache.logging.log4j.LogManager
 import org.elasticsearch.common.settings.ImmutableSettings
 import akka.stream.scaladsl._
-
 import scala.annotation.tailrec
 import scala.util.Try
-
+import scala.collection.JavaConverters._
 object Indexing {
   val config = ConfigFactory.load()
   val log = LogManager.getLogger()
@@ -26,33 +31,69 @@ object Indexing {
     val uri = ElasticsearchClientUri.apply(s"${url}:${port}")
     ElasticClient.remote(settings, uri)
   }
-
+  implicit val indexDocumentBuilder = new RequestBuilder[IndexCandidate] {
+    import ElasticDsl._
+    def request(doc: IndexCandidate):BulkCompatibleDefinition = index into "sources" / "file" fields (
+      "slug" -> doc.slug,
+      "project" -> doc.project,
+      "filename" -> doc.file.getName,
+      "imports" -> doc.imports.map { i =>
+        i.getName.getName
+      },
+      "package" -> doc.packageName,
+      "types" -> doc.typeDeclarations.map { tDecl =>
+        tDecl.getName
+      },
+      "content" -> doc.content
+    )
+  }
   val indexFilesFlow : Flow[IndexRepo, IndexFile, Unit] = {
     Flow[IndexRepo].map { repo =>
       listFiles(repo.path).map { f =>
-        IndexFile(f, repo.slug)
+        IndexFile(f, repo.slug, repo.path.getName)
       }
     } mapConcat{ identity }
   }
 
-  val identifyFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
-    Flow[IndexFile].map { file =>
-      if (file.file.getName.endsWith(".java")) {
-        IndexCandidate(file, FileType.JAVA)
-      } else {
-        IndexCandidate(file, FileType.OTHER)
-      }
+  private def findFileType(file: File): FileType = {
+    if (file.isFile() && file.getName().endsWith(".java")) {
+      JAVA
+    } else {
+      OTHER
+    }
+  }
+
+  private def enrichFromCompilationUnit(file: File, candidate: IndexCandidate): IndexCandidate = {
+    Try {
+        JavaParser.parse(file)
+    } map { compilationUnit =>
+      val imports: List[ImportDeclaration] = compilationUnit.getImports.asScala.toList
+      val types = compilationUnit.getTypes.asScala.toList
+      val packageName = compilationUnit.getPackage.getName.getName
+      candidate.copy(imports = imports, packageName = packageName)
+    } getOrElse {
+      candidate
+    }
+  }
+
+  val readFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
+    Flow[IndexFile].map { indexFile =>
+      val content = io.Source.fromFile(indexFile.file).getLines().toList
+      IndexCandidate(findFileType(indexFile.file), indexFile.slug, indexFile.project, indexFile.file, content)
     }
   }
 
   val enrichJavaFiles : Flow[IndexCandidate, IndexCandidate, Unit] = {
     Flow[IndexCandidate].map { candidate =>
       candidate.fileType match {
-        case FileType.JAVA => candidate
-        case FileType.OTHER => candidate
+        case JAVA => enrichFromCompilationUnit(candidate.file, candidate)
+        case OTHER => candidate
       }
     }
   }
+
+
+
 
 
   private def listFiles(file: File): List[File] = {

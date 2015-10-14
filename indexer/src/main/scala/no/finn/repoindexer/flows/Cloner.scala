@@ -44,7 +44,7 @@ object Cloner {
   }
   val sshSessionFactory = new CustomConfigSessionFactory()
 
-  val clonerFlow : Flow[CloneRepo, IndexRepo, Unit] = Flow[CloneRepo].mapAsync(4) { repo =>
+  val cloneFlow : Flow[CloneRepo, IndexRepo, Unit] = Flow[CloneRepo].mapAsync(4) { repo =>
     repo.sshClone match {
       case Some(cloneUrl) => {
         val localPath = new File(localRepoFolder, repo.escapedUrl(cloneUrl))
@@ -74,10 +74,12 @@ object Cloner {
 
             }
           }
-          IndexRepo(localPath, repo.slug)
+          IndexRepo(localPath, repo.slug, cloneUrl.href)
         }
       }
       case None => Future.failed(new IllegalStateException("No cloneurl"))
     }
   }
+
+  val stashCloningFlow = Stash.cloneCandidatesFlow.via(cloneFlow)
 }
