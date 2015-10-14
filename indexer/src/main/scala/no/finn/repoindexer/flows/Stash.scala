@@ -49,7 +49,7 @@ object Stash {
 
 
 
-  val repoListFlow : Flow[Req, List[StashRepo], Unit] = Flow[Req].mapAsync(2) { r =>
+  val repoListFlow : Flow[Req, List[StashRepo], Unit] = Flow[Req].mapAsyncUnordered(2) { r =>
     println(s"${r.url}")
     stashAuthenticatedRequest(r)
       .map(parse(_))

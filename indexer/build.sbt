@@ -13,6 +13,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % akkaVersion,
   "com.typesafe.akka" %% "akka-testkit" % akkaVersion,
   "com.typesafe.akka" %% "akka-stream-experimental" % "1.0",
+  "org.reactivestreams" % "reactive-streams" % "1.0.0",
   "net.ceedubs" %% "ficus" % "1.1.2",
   "com.jsuereth" %% "scala-arm" % "1.4",
   "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",

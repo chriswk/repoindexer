@@ -4,14 +4,18 @@ import java.io.File
 
 import akka.stream.io.Framing
 import akka.util.ByteString
+import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
 import com.github.javaparser.JavaParser
 import com.github.javaparser.ast.{ImportDeclaration, CompilationUnit}
 import com.sksamuel.elastic4s.streams.RequestBuilder
 import com.sksamuel.elastic4s.{ElasticsearchClientUri, BulkCompatibleDefinition, ElasticClient, ElasticDsl}
+import org.reactivestreams.{Publisher, Subscriber}
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import no.finn.repoindexer.FileType._
 import com.sksamuel.elastic4s.streams.ReactiveElastic._
+
 import no.finn.repoindexer.{FileType, IndexCandidate, IndexFile, IndexRepo}
 import org.apache.logging.log4j.LogManager
 import org.elasticsearch.common.settings.ImmutableSettings
@@ -31,6 +35,8 @@ object Indexing {
     val uri = ElasticsearchClientUri.apply(s"${url}:${port}")
     ElasticClient.remote(settings, uri)
   }
+  implicit lazy val actorSystem = ActorSystem("RepoIndexer")
+  implicit val actorMat = ActorMaterializer()
   implicit val indexDocumentBuilder = new RequestBuilder[IndexCandidate] {
     import ElasticDsl._
     def request(doc: IndexCandidate):BulkCompatibleDefinition = index into "sources" / "file" fields (
@@ -93,8 +99,18 @@ object Indexing {
   }
 
 
+  val fullIndexFlow = Stash.cloneCandidatesFlow
+    .via(Cloner.cloneFlow)
+    .via(indexFilesFlow)
+    .via(readFilesFlow)
+    .via(enrichJavaFiles)
 
-
+    def runReindex() : Unit = {
+      import com.sksamuel.elastic4s.streams.ReactiveElastic._
+      val docPublisher: Publisher[IndexCandidate] = fullIndexFlow.runWith(Sink.publisher)
+      val esSubscriber = client.subscriber[IndexCandidate]()
+      docPublisher.subscribe(esSubscriber)
+    }
 
   private def listFiles(file: File): List[File] = {
     @tailrec
