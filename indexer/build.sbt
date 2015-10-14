@@ -34,38 +34,15 @@ test in assembly := {}
 
 initialCommands :=
   """
-    |import java.io.{FileInputStream, File}
-    |import com.github.javaparser.JavaParser
-    |import com.github.javaparser.ast.CompilationUnit
-    |import com.ning.http.client.RequestBuilder
-    |import com.sksamuel.elastic4s.ElasticDsl.index
-    |import com.typesafe.config.ConfigFactory
-    |import net.ceedubs.ficus.Ficus._
-    |
     |import akka.actor.ActorSystem
     |import akka.stream.ActorMaterializer
     |import akka.stream.scaladsl._
-    |import com.jcraft.jsch.{Session, JSch}
-    |import com.sksamuel.elastic4s.{ElasticsearchClientUri, ElasticClient}
-    |import dispatch._
-    |import org.apache.logging.log4j.{LogManager, Logger}
-    |import org.eclipse.jgit.api.{TransportConfigCallback, Git}
-    |import org.eclipse.jgit.internal.storage.file.FileRepository
-    |import org.eclipse.jgit.lib.TextProgressMonitor
-    |import org.eclipse.jgit.transport.{SshTransport, Transport, OpenSshConfig, JschConfigSessionFactory}
-    |import org.eclipse.jgit.util.FS
-    |import org.elasticsearch.common.settings.ImmutableSettings
-    |import org.json4s.DefaultFormats
-    |import resource._
-    |import scala.annotation.tailrec
-    |import scala.util.{Try, Success, Failure}
-    |import org.json4s._
-    |import org.json4s.jackson.JsonMethods._
-    |import org.json4s.JsonDSL._
+    |import no.finn.repoindexer.flows.Cloner
+    |import no.finn.repoindexer.flows.Stash
+    |import no.finn.repoindexer.flows.Indexing
     |import scala.concurrent.ExecutionContext.Implicits.global
     |
     |implicit lazy val system = ActorSystem("RepoIndexer")
     |implicit val materializer = ActorMaterializer()
-    |
-    |val ctx = no.finn.repoindexer.ApplicationMain
+
   """.stripMargin

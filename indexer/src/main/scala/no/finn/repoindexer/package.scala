@@ -9,7 +9,11 @@ import org.json4s.{CustomSerializer, JObject}
 package object repoindexer {
   case object GetProjects
   case class GetRepositories(projectKey: String, link: String)
-  case class CloneRepo(sshClone: Option[StashLink], slug: String)
+  case class CloneRepo(sshClone: Option[StashLink], slug: String) {
+    def escapedUrl(stashLink: StashLink): String = {
+      stashLink.href.replaceAll("\\W", "-")
+    }
+  }
   case class IndexRepo(path: File, slug: String)
   case class IndexFile(file: File, slug: String)
   case class Project(key: String, id: Long, name: String, public: Boolean, link: Link)
