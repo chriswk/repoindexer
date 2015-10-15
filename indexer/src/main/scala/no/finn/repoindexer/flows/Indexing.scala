@@ -27,6 +27,7 @@ import scala.collection.JavaConverters._
 object Indexing {
   val config = ConfigFactory.load()
   val log = LogManager.getLogger()
+  val localRepoFolder = config.getString("repo.folder")
   val client = {
     val cluster = config.as[Option[String]]("es.cluster").getOrElse("elasticsearch")
     val url = config.as[Option[String]]("es.url").getOrElse("localhost")
@@ -45,7 +46,9 @@ object Indexing {
       "imports" -> doc.imports.map { i =>
         i.getName.getName
       },
-      "fullyQualifiedImport" -> doc.imports.toString(),
+      "fullyQualifiedImport" -> doc.imports.map { i =>
+        i.toString
+      },
       "package" -> doc.packageName.map(p => p.getName.getName),
       "packageName" -> doc.packageName.map(p => p.getName),
       "fullyQualifiedPackage" -> doc.packageName.map(p => p.toString),
@@ -55,12 +58,27 @@ object Indexing {
       "content" -> doc.content
     )
   }
+
+  val fileSource : Source[IndexRepo, Unit] = {
+    val localRepo = new File(localRepoFolder)
+    if (localRepo.exists()) {
+      val repos = new File(localRepoFolder).list.map { repo =>
+        IndexRepo(new File(localRepoFolder, repo), findSlug(repo), repo)
+      }
+      Source(repos.toList)
+    } else {
+      Source.empty
+    }
+  }
   val indexFilesFlow : Flow[IndexRepo, IndexFile, Unit] = {
     Flow[IndexRepo].map { repo =>
       listFiles(repo.path).map { f =>
         IndexFile(f, repo.slug, repo.path.getName)
+      } filter { indexFile =>
+        shouldIndex(indexFile.file)
       }
     } mapConcat{ identity }
+
   }
 
   val readFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
@@ -95,6 +113,13 @@ object Indexing {
     }
   }
 
+  def findSlug(repo: String) = {
+    repo.replaceAll("ssh---git-git-finn-no-7999-", "").split("-").drop(1).filter(_ != "git").mkString("-")
+  }
+
+  def findProject(repo:String) = {
+    repo.replaceAll("ssh---git-git-finn-no-7999-", "").split("-").head
+  }
   private def enrichFromCompilationUnit(file: File, candidate: IndexCandidate): IndexCandidate = {
     Try {
         JavaParser.parse(file)

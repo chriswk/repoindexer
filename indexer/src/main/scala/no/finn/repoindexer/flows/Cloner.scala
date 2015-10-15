@@ -15,6 +15,7 @@ import akka.stream.scaladsl._
 import resource._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
 
 
 object Cloner {
@@ -50,13 +51,18 @@ object Cloner {
         val localPath = new File(localRepoFolder, repo.escapedUrl(cloneUrl))
         Future {
           if (localPath.exists) {
+            val git = new Git(new FileRepository(new File(localPath, ".git")))
             println(s"Pulling ${repo}")
-            val pullResult = new Git(new FileRepository(new File(localPath, ".git")))
-              .pull()
-              .setTransportConfigCallback(transportConfig)
-              .setProgressMonitor(progressMonitor)
-              .call()
-
+            try {
+              git.pull()
+                .setTransportConfigCallback(transportConfig)
+                .setProgressMonitor(progressMonitor)
+                .call()
+            } catch {
+              case e: Exception => println("Something went wrong while pulling")
+            } finally {
+              git.close()
+            }
           } else {
             localPath.mkdirs()
             val url = cloneUrl.href
