@@ -47,18 +47,19 @@ object Indexing {
         i.getName.getName
       },
       "fullyQualifiedImport" -> doc.imports.map { i =>
-        i.toString
+        stripSemiColon(i.toString)
       },
-      "package" -> doc.packageName.map(p => p.getName.getName),
-      "packageName" -> doc.packageName.map(p => p.getName),
-      "fullyQualifiedPackage" -> doc.packageName.map(p => p.toString),
+      "package" -> doc.packageName.map(p => p.getName.getName).getOrElse(""),
+      "packageName" -> doc.packageName.map(p => p.getName).getOrElse(""),
+      "fullyQualifiedPackage" -> doc.packageName.map(p => stripSemiColon(p.toString)).getOrElse(""),
       "types" -> doc.typeDeclarations.map { tDecl =>
-        tDecl.toString
+        stripSemiColon(tDecl.toString)
       },
       "content" -> doc.content
     )
   }
 
+  def stripSemiColon(s: String): String = s.replaceAll(";", "")
   val fileSource : Source[IndexRepo, Unit] = {
     val localRepo = new File(localRepoFolder)
     if (localRepo.exists()) {
@@ -127,7 +128,7 @@ object Indexing {
       val imports: List[ImportDeclaration] = compilationUnit.getImports.asScala.toList
       val types = compilationUnit.getTypes.asScala.toList
       val packageName = compilationUnit.getPackage
-      candidate.copy(imports = imports, packageName = Some(packageName), content = compilationUnit.toStringWithoutComments)
+      candidate.copy(imports = imports, packageName = Some(packageName))
     } getOrElse {
       candidate
     }
