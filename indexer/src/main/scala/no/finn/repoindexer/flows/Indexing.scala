@@ -8,7 +8,7 @@ import akka.util.ByteString
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import com.github.javaparser.JavaParser
-import com.github.javaparser.ast.{ImportDeclaration, CompilationUnit}
+import com.github.javaparser.ast.{Node, ImportDeclaration, CompilationUnit}
 import com.sksamuel.elastic4s.streams.RequestBuilder
 import com.sksamuel.elastic4s.{ElasticsearchClientUri, BulkCompatibleDefinition, ElasticClient, ElasticDsl}
 import org.reactivestreams.{Publisher, Subscriber}
@@ -45,11 +45,14 @@ object Indexing {
       "imports" -> doc.imports.map { i =>
         i.getName.getName
       },
-      "package" -> doc.packageName,
+      "fullyQualifiedImport" -> doc.imports.toString(),
+      "package" -> doc.packageName.map(p => p.getName.getName),
+      "packageName" -> doc.packageName.map(p => p.getName),
+      "fullyQualifiedPackage" -> doc.packageName.map(p => p.toString),
       "types" -> doc.typeDeclarations.map { tDecl =>
-        tDecl.getName
+        tDecl.toString
       },
-      "content" -> doc.content.mkString("")
+      "content" -> doc.content
     )
   }
   val indexFilesFlow : Flow[IndexRepo, IndexFile, Unit] = {
@@ -62,7 +65,7 @@ object Indexing {
 
   val readFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
     Flow[IndexFile].map { indexFile =>
-      val content = io.Source.fromFile(indexFile.file).getLines().toList
+      val content = io.Source.fromFile(indexFile.file).getLines().toList.mkString("")
       IndexCandidate(findFileType(indexFile.file), indexFile.slug, indexFile.project, indexFile.file, content)
     }
   }
@@ -98,8 +101,8 @@ object Indexing {
     } map { compilationUnit =>
       val imports: List[ImportDeclaration] = compilationUnit.getImports.asScala.toList
       val types = compilationUnit.getTypes.asScala.toList
-      val packageName = compilationUnit.getPackage.getName.getName
-      candidate.copy(imports = imports, packageName = packageName)
+      val packageName = compilationUnit.getPackage
+      candidate.copy(imports = imports, packageName = Some(packageName), content = compilationUnit.toStringWithoutComments)
     } getOrElse {
       candidate
     }

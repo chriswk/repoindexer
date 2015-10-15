@@ -41,9 +41,33 @@ initialCommands :=
     |import no.finn.repoindexer.flows.Stash
     |import no.finn.repoindexer.flows.Indexing
     |import no.finn.repoindexer._
+    |import com.sksamuel.elastic4s.streams.RequestBuilder
+    |import com.sksamuel.elastic4s.{ElasticsearchClientUri, BulkCompatibleDefinition, ElasticClient, ElasticDsl}
+    |import java.io.File
     |import scala.concurrent.ExecutionContext.Implicits.global
+    |import com.sksamuel.elastic4s.streams.ReactiveElastic._
+    |
     |
     |implicit lazy val system = ActorSystem("RepoIndexer")
     |implicit val materializer = ActorMaterializer()
+    |implicit val indexDocumentBuilder = new RequestBuilder[IndexCandidate] {
+    |    import ElasticDsl._
+    |    def request(doc: IndexCandidate):BulkCompatibleDefinition = index into "sources" / "file" fields (
+    |      "slug" -> doc.slug,
+    |      "project" -> doc.project,
+    |      "filename" -> doc.file.getName,
+    |      "imports" -> doc.imports.map { i =>
+    |        i.getName.getName
+    |      },
+    |      "fullyQualifiedImport" -> doc.imports.toString(),
+    |      "package" -> doc.packageName.map(p => p.getName.getName),
+    |      "packageName" -> doc.packageName.map(p => p.getName),
+    |      "fullyQualifiedPackage" -> doc.packageName.map(p => p.toString),
+    |      "types" -> doc.typeDeclarations.map { tDecl =>
+    |        tDecl.toString
+    |      },
+    |      "content" -> doc.content
+    |    )
+    |  }
 
   """.stripMargin

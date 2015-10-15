@@ -2,7 +2,7 @@ package no.finn
 
 import java.io.File
 
-import com.github.javaparser.ast.ImportDeclaration
+import com.github.javaparser.ast.{PackageDeclaration, ImportDeclaration}
 import com.github.javaparser.ast.body.TypeDeclaration
 import no.finn.repoindexer.FileType.FileType
 import org.json4s.JsonAST.{JArray, JField}
@@ -26,8 +26,8 @@ package object repoindexer {
   case class ProjectInfo(key: String, url: String)
 //  case class StashLinks(self: List[StashLink], `clone`: List[StashLink])
   case class StashRepo(slug: String, name: String, cloneUrl: String, links: Map[String, List[StashLink]])
-  case class IndexCandidate(fileType: FileType, slug: String, project: String, file: File, content: List[String] = List(),
-                            imports: List[ImportDeclaration] = List(), packageName: String = "", typeDeclarations :List[TypeDeclaration] = List()
+  case class IndexCandidate(fileType: FileType, slug: String, project: String, file: File, content: String = "",
+                            imports: List[ImportDeclaration] = List(), packageName: Option[PackageDeclaration] = None, typeDeclarations :List[TypeDeclaration] = List()
                            )
   type Projects = Seq[Project]
 
