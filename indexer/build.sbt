@@ -28,10 +28,9 @@ libraryDependencies ++= Seq(
   "org.eclipse.jgit" % "org.eclipse.jgit" % "4.0.1.201506240215-r",
   "com.github.javaparser" % "javaparser-core" % "2.2.2",
   "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",
+  "com.typesafe.akka" %% "akka-stream-testkit-experimental" % "1.0" % "test",
   "org.scalatest" %% "scalatest" % "2.2.4" % "test"
 ).map(_.exclude("commons-logging", "commons-logging"))
-
-test in assembly := {}
 
 initialCommands :=
   """
@@ -41,6 +40,7 @@ initialCommands :=
     |import no.finn.repoindexer.flows.Cloner
     |import no.finn.repoindexer.flows.Stash
     |import no.finn.repoindexer.flows.Indexing
+    |import no.finn.repoindexer._
     |import scala.concurrent.ExecutionContext.Implicits.global
     |
     |implicit lazy val system = ActorSystem("RepoIndexer")

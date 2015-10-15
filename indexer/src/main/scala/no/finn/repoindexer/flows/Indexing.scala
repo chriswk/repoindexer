@@ -1,6 +1,7 @@
 package no.finn.repoindexer.flows
 
 import java.io.File
+import java.nio.file.Paths
 
 import akka.stream.io.Framing
 import akka.util.ByteString
@@ -35,8 +36,6 @@ object Indexing {
     val uri = ElasticsearchClientUri.apply(s"${url}:${port}")
     ElasticClient.remote(settings, uri)
   }
-  implicit lazy val actorSystem = ActorSystem("RepoIndexer")
-  implicit val actorMat = ActorMaterializer()
   implicit val indexDocumentBuilder = new RequestBuilder[IndexCandidate] {
     import ElasticDsl._
     def request(doc: IndexCandidate):BulkCompatibleDefinition = index into "sources" / "file" fields (
@@ -50,7 +49,7 @@ object Indexing {
       "types" -> doc.typeDeclarations.map { tDecl =>
         tDecl.getName
       },
-      "content" -> doc.content
+      "content" -> doc.content.mkString("")
     )
   }
   val indexFilesFlow : Flow[IndexRepo, IndexFile, Unit] = {
@@ -59,27 +58,6 @@ object Indexing {
         IndexFile(f, repo.slug, repo.path.getName)
       }
     } mapConcat{ identity }
-  }
-
-  private def findFileType(file: File): FileType = {
-    if (file.isFile() && file.getName().endsWith(".java")) {
-      JAVA
-    } else {
-      OTHER
-    }
-  }
-
-  private def enrichFromCompilationUnit(file: File, candidate: IndexCandidate): IndexCandidate = {
-    Try {
-        JavaParser.parse(file)
-    } map { compilationUnit =>
-      val imports: List[ImportDeclaration] = compilationUnit.getImports.asScala.toList
-      val types = compilationUnit.getTypes.asScala.toList
-      val packageName = compilationUnit.getPackage.getName.getName
-      candidate.copy(imports = imports, packageName = packageName)
-    } getOrElse {
-      candidate
-    }
   }
 
   val readFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
@@ -105,19 +83,42 @@ object Indexing {
     .via(readFilesFlow)
     .via(enrichJavaFiles)
 
-    def runReindex() : Unit = {
+
+  private def findFileType(file: File): FileType = {
+    if (file.isFile() && file.getName().endsWith(".java")) {
+      JAVA
+    } else {
+      OTHER
+    }
+  }
+
+  private def enrichFromCompilationUnit(file: File, candidate: IndexCandidate): IndexCandidate = {
+    Try {
+        JavaParser.parse(file)
+    } map { compilationUnit =>
+      val imports: List[ImportDeclaration] = compilationUnit.getImports.asScala.toList
+      val types = compilationUnit.getTypes.asScala.toList
+      val packageName = compilationUnit.getPackage.getName.getName
+      candidate.copy(imports = imports, packageName = packageName)
+    } getOrElse {
+      candidate
+    }
+  }
+  def runReindex() : Unit = {
       import com.sksamuel.elastic4s.streams.ReactiveElastic._
+      implicit lazy val actorSystem = ActorSystem("RepoIndexer")
+      implicit val actorMat = ActorMaterializer()
       val docPublisher: Publisher[IndexCandidate] = fullIndexFlow.runWith(Sink.publisher)
       val esSubscriber = client.subscriber[IndexCandidate]()
       docPublisher.subscribe(esSubscriber)
-    }
+  }
 
   private def listFiles(file: File): List[File] = {
     @tailrec
     def listFiles(files: List[File], result: List[File]): List[File] = files match {
       case Nil => result
       case head :: tail if head.isDirectory =>
-        listFiles(Option(head.listFiles).map(_.toList ::: tail).getOrElse(tail), result)
+        listFiles(Option(head.listFiles.filter(f => f.getName != ".git")).map(_.toList ::: tail).getOrElse(tail), result)
       case head :: tail if head.isFile =>
         listFiles(tail, head :: result)
     }
