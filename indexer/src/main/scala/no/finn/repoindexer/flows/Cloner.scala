@@ -7,8 +7,10 @@ import com.typesafe.config.ConfigFactory
 import no.finn.repoindexer.{IndexRepo, CloneRepo}
 import org.eclipse.jgit.api.{Git, TransportConfigCallback}
 import org.eclipse.jgit.internal.storage.file.FileRepository
-import org.eclipse.jgit.lib.TextProgressMonitor
+import org.eclipse.jgit.lib.{ObjectId, ObjectReader, TextProgressMonitor}
+import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.transport.{SshTransport, Transport, OpenSshConfig, JschConfigSessionFactory}
+import org.eclipse.jgit.treewalk.TreeWalk
 import org.eclipse.jgit.util.FS
 import org.json4s.DefaultFormats
 import akka.stream.scaladsl._
@@ -84,6 +86,20 @@ object Cloner {
         }
       }
       case None => Future.failed(new IllegalStateException("No cloneurl"))
+    }
+  }
+
+  val branches = Flow[IndexRepo].mapAsyncUnordered(4) { repo =>
+    Future {
+      val gitRepo = new FileRepository(repo.path)
+      val head = gitRepo.resolve("HEAD")
+      val reader = gitRepo.newObjectReader()
+      val revWalk = new RevWalk(reader)
+      val tip = revWalk.parseCommit(head)
+      val tipId = tip.getId().getName()
+      val treeWalk = new TreeWalk(gitRepo)
+      treeWalk.addTree(tip.getTree)
+      treeWalk.setRecursive(true)
     }
   }
 
