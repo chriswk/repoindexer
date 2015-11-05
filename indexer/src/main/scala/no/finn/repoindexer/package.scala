@@ -2,9 +2,10 @@ package no.finn
 
 import java.io.File
 
+import ammonite.ops.Path
 import com.github.javaparser.ast.{PackageDeclaration, ImportDeclaration}
 import com.github.javaparser.ast.body.TypeDeclaration
-import no.finn.repoindexer.FileType.FileType
+import no.finn.repoindexer.IdxProcess.IdxProcess
 import org.json4s.JsonAST.{JArray, JField}
 import org.json4s.{CustomSerializer, JObject}
 
@@ -16,8 +17,11 @@ package object repoindexer {
       stashLink.href.replaceAll("\\W", "-")
     }
   }
+  case class AmmoniteIndexRepo(path: Path, slug: String, fullUrl: String)
   case class IndexRepo(path: File, slug: String, fullUrl: String)
+  case class AmmoniteIndexFile(path: Path, slug: String, project: String)
   case class IndexFile(file: File, slug: String, project: String)
+
   case class Project(key: String, id: Long, name: String, public: Boolean, link: Link)
   case class Link(url: String, rel: String)
   case class ProjectResponse(values: List[Project])
@@ -26,13 +30,16 @@ package object repoindexer {
   case class ProjectInfo(key: String, url: String)
 //  case class StashLinks(self: List[StashLink], `clone`: List[StashLink])
   case class StashRepo(slug: String, name: String, cloneUrl: String, links: Map[String, List[StashLink]])
-  case class IndexCandidate(fileType: FileType, slug: String, project: String, file: File, content: String = "",
+  case class AmmoniteIndexCandidate(fileType: IdxProcess, slug: String, project: String, path: Path, content: String = "",
+                                    imports: List[ImportDeclaration] = List(), packageName: Option[PackageDeclaration] = None, typeDeclarations :List[TypeDeclaration] = List()
+                                   )
+  case class IndexCandidate(fileType: IdxProcess, slug: String, project: String, file: File, content: String = "",
                             imports: List[ImportDeclaration] = List(), packageName: Option[PackageDeclaration] = None, typeDeclarations :List[TypeDeclaration] = List()
                            )
   type Projects = Seq[Project]
 
-  object FileType extends Enumeration {
-    type FileType = Value
+  object IdxProcess extends Enumeration {
+    type IdxProcess = Value
     val JAVA, OTHER = Value
   }
 

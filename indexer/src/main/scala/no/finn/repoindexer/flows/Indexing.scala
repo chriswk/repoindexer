@@ -11,19 +11,22 @@ import com.github.javaparser.JavaParser
 import com.github.javaparser.ast.{Node, ImportDeclaration, CompilationUnit}
 import com.sksamuel.elastic4s.streams.RequestBuilder
 import com.sksamuel.elastic4s.{ElasticsearchClientUri, BulkCompatibleDefinition, ElasticClient, ElasticDsl}
+import no.finn.repoindexer.IdxProcess
 import org.reactivestreams.{Publisher, Subscriber}
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
-import no.finn.repoindexer.FileType._
+import no.finn.repoindexer.IdxProcess._
 import com.sksamuel.elastic4s.streams.ReactiveElastic._
 
-import no.finn.repoindexer.{FileType, IndexCandidate, IndexFile, IndexRepo}
+import no.finn.repoindexer._
 import org.apache.logging.log4j.LogManager
 import org.elasticsearch.common.settings.ImmutableSettings
 import akka.stream.scaladsl._
 import scala.annotation.tailrec
 import scala.util.Try
 import scala.collection.JavaConverters._
+
+import ammonite.ops._
 object Indexing {
   val config = ConfigFactory.load()
   val log = LogManager.getLogger()
@@ -60,16 +63,21 @@ object Indexing {
   }
 
   def stripSemiColon(s: String): String = s.replaceAll(";", "")
-  val fileSource : Source[IndexRepo, Unit] = {
-    val localRepo = new File(localRepoFolder)
-    if (localRepo.exists()) {
-      val repos = new File(localRepoFolder).list.map { repo =>
-        IndexRepo(new File(localRepoFolder, repo), findSlug(repo), repo)
+
+  def pathToUrl(repo: Path): String = ""
+
+  val fileSource : Source[AmmoniteIndexRepo, Unit] = {
+    val localRepo = Path(localRepoFolder)
+    val repoList = ls! localRepo | (repo => AmmoniteIndexRepo(repo, repo.last, pathToUrl(repo)))
+    Source(repoList.toList)
+  }
+
+  val ammoIndexFilesFlow: Flow[AmmoniteIndexRepo, AmmoniteIndexFile, Unit] = {
+    Flow[AmmoniteIndexRepo].map { repo =>
+      (ls.rec! repo.path |? (file => shouldIndexAmmo(file))).toList.map { p =>
+        AmmoniteIndexFile(p, repo.slug, repo.path.last)
       }
-      Source(repos.toList)
-    } else {
-      Source.empty
-    }
+    } mapConcat { identity }
   }
   val indexFilesFlow : Flow[IndexRepo, IndexFile, Unit] = {
     Flow[IndexRepo].map { repo =>
@@ -82,6 +90,19 @@ object Indexing {
 
   }
 
+  def findFileTypeAmmo(path: Path): IdxProcess = {
+    if (path.isFile && path.ext == ".java")
+      JAVA
+    else
+      OTHER
+  }
+
+  val ammoReadFilesFlow : Flow[AmmoniteIndexFile, AmmoniteIndexCandidate, Unit] = {
+    Flow[AmmoniteIndexFile].map { idxFile =>
+      val content: String = read.lines(idxFile.path).mkString("\n")
+      AmmoniteIndexCandidate(findFileTypeAmmo(idxFile.path), idxFile.slug, idxFile.project, idxFile.path, content)
+    }
+  }
   val readFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
     Flow[IndexFile].map { indexFile =>
       val content = io.Source.fromFile(indexFile.file).getLines().toList.mkString("")
@@ -89,6 +110,15 @@ object Indexing {
     }
   }
 
+  val ammoEnrichJavaFiles: Flow[AmmoniteIndexCandidate, AmmoniteIndexCandidate, Unit] = {
+    Flow[AmmoniteIndexCandidate].map { candidate =>
+      candidate.fileType match {
+        case JAVA => ammoEnrichFromCompilationUnit(new File(candidate.path.toString), candidate)
+        case OTHER => candidate
+      }
+
+    }
+  }
   val enrichJavaFiles : Flow[IndexCandidate, IndexCandidate, Unit] = {
     Flow[IndexCandidate].map { candidate =>
       candidate.fileType match {
@@ -106,7 +136,7 @@ object Indexing {
     .via(enrichJavaFiles)
 
 
-  private def findFileType(file: File): FileType = {
+  private def findFileType(file: File): IdxProcess = {
     if (file.isFile() && file.getName().endsWith(".java")) {
       JAVA
     } else {
@@ -133,6 +163,20 @@ object Indexing {
       candidate
     }
   }
+
+  private def ammoEnrichFromCompilationUnit(file: File, candidate: AmmoniteIndexCandidate): AmmoniteIndexCandidate = {
+    Try {
+      JavaParser.parse(file)
+    } map { compilationUnit =>
+      val imports: List[ImportDeclaration] = compilationUnit.getImports.asScala.toList
+      val types = compilationUnit.getTypes.asScala.toList
+      val packageName = compilationUnit.getPackage
+      candidate.copy(imports = imports, packageName = Some(packageName))
+    } getOrElse {
+      candidate
+    }
+  }
+
   def runReindex() : Unit = {
       import com.sksamuel.elastic4s.streams.ReactiveElastic._
       implicit lazy val actorSystem = ActorSystem("RepoIndexer")
@@ -156,6 +200,7 @@ object Indexing {
 
   private val includeExtensions = Seq(".java", ".scala", ".xml", ".md", ".groovy", ".gradle", ".sbt")
   private def shouldIndex(file: File) = includeExtensions.exists(extension => file.getPath.endsWith(extension))
+  private def shouldIndexAmmo(path: Path) = path.isFile && includeExtensions.contains(path.ext)
 
 
 }
