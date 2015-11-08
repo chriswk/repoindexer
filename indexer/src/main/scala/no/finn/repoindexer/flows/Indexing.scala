@@ -46,6 +46,7 @@ object Indexing {
       "slug" -> doc.slug,
       "project" -> doc.project,
       "filename" -> doc.path.last,
+      "extension" -> doc.path.ext,
       "imports" -> doc.imports.map { i =>
         i.getName.getName
       },
@@ -74,7 +75,6 @@ object Indexing {
 
   val indexFilesFlow: Flow[IndexRepo, IndexFile, Unit] = {
     Flow[IndexRepo].map { repo =>
-      println(repo)
       (ls.rec! repo.path |? (file => shouldIndexAmmo(file))).toList.map { p =>
         IndexFile(p, repo.slug, repo.path.last)
       }
@@ -140,6 +140,18 @@ object Indexing {
       candidate
     }
   }
+  val fileReadingFlow = fileSource
+    .via(indexFilesFlow)
+    .via(readFilesFlow)
+    .via(enrichJavaFiles)
+  def indexAlreadyCheckedOut() : Unit = {
+    import com.sksamuel.elastic4s.streams.ReactiveElastic._
+    implicit lazy val actorSystem = ActorSystem("FileIndexer")
+    implicit val actorMat = ActorMaterializer()
+    val docPublisher = fileReadingFlow.runWith(Sink.publisher)
+    val esSubscriber = client.subscriber[IndexCandidate]()
+    docPublisher.subscribe(esSubscriber)
+  }
 
   def runReindex() : Unit = {
       import com.sksamuel.elastic4s.streams.ReactiveElastic._
@@ -151,7 +163,7 @@ object Indexing {
   }
 
 
-  private val includeExtensions = Seq(".java", ".scala", ".xml", ".md", ".groovy", ".gradle", ".sbt")
+  private val includeExtensions = Seq("java", "scala", "xml", "md", "groovy", "gradle", "sbt")
   private def shouldIndex(file: File) = includeExtensions.exists(extension => file.getPath.endsWith(extension))
   private def shouldIndexAmmo(path: Path) = path.isFile && includeExtensions.contains(path.ext)
 

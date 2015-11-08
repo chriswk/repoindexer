@@ -51,21 +51,25 @@ initialCommands :=
     |
     |implicit lazy val system = ActorSystem("RepoIndexer")
     |implicit val materializer = ActorMaterializer()
+    |def stripSemiColon(s: String): String = s.replaceAll(";", "")
     |implicit val indexDocumentBuilder = new RequestBuilder[IndexCandidate] {
     |    import ElasticDsl._
     |    def request(doc: IndexCandidate):BulkCompatibleDefinition = index into "sources" / "file" fields (
     |      "slug" -> doc.slug,
     |      "project" -> doc.project,
     |      "filename" -> doc.path.last,
+    |      "extension" -> doc.path.ext,
     |      "imports" -> doc.imports.map { i =>
     |        i.getName.getName
     |      },
-    |      "fullyQualifiedImport" -> doc.imports.toString(),
-    |      "package" -> doc.packageName.map(p => p.getName.getName),
-    |      "packageName" -> doc.packageName.map(p => p.getName),
-    |      "fullyQualifiedPackage" -> doc.packageName.map(p => p.toString),
+    |      "fullyQualifiedImport" -> doc.imports.map { i =>
+    |        stripSemiColon(i.toString)
+    |      },
+    |      "package" -> doc.packageName.map(p => p.getName.getName).getOrElse(""),
+    |      "packageName" -> doc.packageName.map(p => p.getName).getOrElse(""),
+    |      "fullyQualifiedPackage" -> doc.packageName,
     |      "types" -> doc.typeDeclarations.map { tDecl =>
-    |        tDecl.toString
+    |        stripSemiColon(tDecl.toString)
     |      },
     |      "content" -> doc.content
     |    )
