@@ -17,10 +17,8 @@ package object repoindexer {
       stashLink.href.replaceAll("\\W", "-")
     }
   }
-  case class AmmoniteIndexRepo(path: Path, slug: String, fullUrl: String)
-  case class IndexRepo(path: File, slug: String, fullUrl: String)
-  case class AmmoniteIndexFile(path: Path, slug: String, project: String)
-  case class IndexFile(file: File, slug: String, project: String)
+  case class IndexRepo(path: Path, slug: String, fullUrl: String)
+  case class IndexFile(path: Path, slug: String, project: String)
 
   case class Project(key: String, id: Long, name: String, public: Boolean, link: Link)
   case class Link(url: String, rel: String)
@@ -30,12 +28,9 @@ package object repoindexer {
   case class ProjectInfo(key: String, url: String)
 //  case class StashLinks(self: List[StashLink], `clone`: List[StashLink])
   case class StashRepo(slug: String, name: String, cloneUrl: String, links: Map[String, List[StashLink]])
-  case class AmmoniteIndexCandidate(fileType: IdxProcess, slug: String, project: String, path: Path, content: String = "",
+  case class IndexCandidate(fileType: IdxProcess, slug: String, project: String, path: Path, content: String = "",
                                     imports: List[ImportDeclaration] = List(), packageName: Option[PackageDeclaration] = None, typeDeclarations :List[TypeDeclaration] = List()
                                    )
-  case class IndexCandidate(fileType: IdxProcess, slug: String, project: String, file: File, content: String = "",
-                            imports: List[ImportDeclaration] = List(), packageName: Option[PackageDeclaration] = None, typeDeclarations :List[TypeDeclaration] = List()
-                           )
   type Projects = Seq[Project]
 
   object IdxProcess extends Enumeration {

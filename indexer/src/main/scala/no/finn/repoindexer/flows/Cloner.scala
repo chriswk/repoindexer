@@ -2,6 +2,7 @@ package no.finn.repoindexer.flows
 
 import java.io.File
 
+import ammonite.ops.Path
 import com.jcraft.jsch.{Session, JSch}
 import com.typesafe.config.ConfigFactory
 import no.finn.repoindexer.{IndexRepo, CloneRepo}
@@ -80,7 +81,7 @@ object Cloner {
 
             }
           }
-          IndexRepo(localPath, repo.slug, cloneUrl.href)
+          IndexRepo(Path(localPath), repo.slug, cloneUrl.href)
         }
       }
       case None => Future.failed(new IllegalStateException("No cloneurl"))

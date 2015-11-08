@@ -45,7 +45,7 @@ object Indexing {
     def request(doc: IndexCandidate):BulkCompatibleDefinition = index into "sources" / "file" fields (
       "slug" -> doc.slug,
       "project" -> doc.project,
-      "filename" -> doc.file.getName,
+      "filename" -> doc.path.last,
       "imports" -> doc.imports.map { i =>
         i.getName.getName
       },
@@ -66,28 +66,19 @@ object Indexing {
 
   def pathToUrl(repo: Path): String = ""
 
-  val fileSource : Source[AmmoniteIndexRepo, Unit] = {
+  val fileSource : Source[IndexRepo, Unit] = {
     val localRepo = Path(localRepoFolder)
-    val repoList = ls! localRepo | (repo => AmmoniteIndexRepo(repo, repo.last, pathToUrl(repo)))
+    val repoList = ls! localRepo | (repo => IndexRepo(repo, repo.last, pathToUrl(repo)))
     Source(repoList.toList)
   }
 
-  val ammoIndexFilesFlow: Flow[AmmoniteIndexRepo, AmmoniteIndexFile, Unit] = {
-    Flow[AmmoniteIndexRepo].map { repo =>
+  val indexFilesFlow: Flow[IndexRepo, IndexFile, Unit] = {
+    Flow[IndexRepo].map { repo =>
+      println(repo)
       (ls.rec! repo.path |? (file => shouldIndexAmmo(file))).toList.map { p =>
-        AmmoniteIndexFile(p, repo.slug, repo.path.last)
+        IndexFile(p, repo.slug, repo.path.last)
       }
     } mapConcat { identity }
-  }
-  val indexFilesFlow : Flow[IndexRepo, IndexFile, Unit] = {
-    Flow[IndexRepo].map { repo =>
-      listFiles(repo.path).map { f =>
-        IndexFile(f, repo.slug, repo.path.getName)
-      } filter { indexFile =>
-        shouldIndex(indexFile.file)
-      }
-    } mapConcat{ identity }
-
   }
 
   def findFileTypeAmmo(path: Path): IdxProcess = {
@@ -97,37 +88,22 @@ object Indexing {
       OTHER
   }
 
-  val ammoReadFilesFlow : Flow[AmmoniteIndexFile, AmmoniteIndexCandidate, Unit] = {
-    Flow[AmmoniteIndexFile].map { idxFile =>
-      val content: String = read.lines(idxFile.path).mkString("\n")
-      AmmoniteIndexCandidate(findFileTypeAmmo(idxFile.path), idxFile.slug, idxFile.project, idxFile.path, content)
-    }
-  }
   val readFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
-    Flow[IndexFile].map { indexFile =>
-      val content = io.Source.fromFile(indexFile.file).getLines().toList.mkString("")
-      IndexCandidate(findFileType(indexFile.file), indexFile.slug, indexFile.project, indexFile.file, content)
+    Flow[IndexFile].map { idxFile =>
+      val content: String = read.lines(idxFile.path).mkString("\n")
+      IndexCandidate(findFileTypeAmmo(idxFile.path), idxFile.slug, idxFile.project, idxFile.path, content)
     }
   }
 
-  val ammoEnrichJavaFiles: Flow[AmmoniteIndexCandidate, AmmoniteIndexCandidate, Unit] = {
-    Flow[AmmoniteIndexCandidate].map { candidate =>
-      candidate.fileType match {
-        case JAVA => ammoEnrichFromCompilationUnit(new File(candidate.path.toString), candidate)
-        case OTHER => candidate
-      }
-
-    }
-  }
-  val enrichJavaFiles : Flow[IndexCandidate, IndexCandidate, Unit] = {
+  val enrichJavaFiles: Flow[IndexCandidate, IndexCandidate, Unit] = {
     Flow[IndexCandidate].map { candidate =>
       candidate.fileType match {
-        case JAVA => enrichFromCompilationUnit(candidate.file, candidate)
+        case JAVA => enrichFromCompilationUnit(new File(candidate.path.toString), candidate)
         case OTHER => candidate
       }
+
     }
   }
-
 
   val fullIndexFlow = Stash.cloneCandidatesFlow
     .via(Cloner.cloneFlow)
@@ -151,20 +127,8 @@ object Indexing {
   def findProject(repo:String) = {
     repo.replaceAll("ssh---git-git-finn-no-7999-", "").split("-").head
   }
-  private def enrichFromCompilationUnit(file: File, candidate: IndexCandidate): IndexCandidate = {
-    Try {
-        JavaParser.parse(file)
-    } map { compilationUnit =>
-      val imports: List[ImportDeclaration] = compilationUnit.getImports.asScala.toList
-      val types = compilationUnit.getTypes.asScala.toList
-      val packageName = compilationUnit.getPackage
-      candidate.copy(imports = imports, packageName = Some(packageName))
-    } getOrElse {
-      candidate
-    }
-  }
 
-  private def ammoEnrichFromCompilationUnit(file: File, candidate: AmmoniteIndexCandidate): AmmoniteIndexCandidate = {
+  private def enrichFromCompilationUnit(file: File, candidate: IndexCandidate): IndexCandidate = {
     Try {
       JavaParser.parse(file)
     } map { compilationUnit =>
@@ -186,17 +150,6 @@ object Indexing {
       docPublisher.subscribe(esSubscriber)
   }
 
-  private def listFiles(file: File): List[File] = {
-    @tailrec
-    def listFiles(files: List[File], result: List[File]): List[File] = files match {
-      case Nil => result
-      case head :: tail if head.isDirectory =>
-        listFiles(Option(head.listFiles.filter(f => f.getName != ".git")).map(_.toList ::: tail).getOrElse(tail), result)
-      case head :: tail if head.isFile =>
-        listFiles(tail, head :: result)
-    }
-    listFiles(List(file), Nil)
-  }
 
   private val includeExtensions = Seq(".java", ".scala", ".xml", ".md", ".groovy", ".gradle", ".sbt")
   private def shouldIndex(file: File) = includeExtensions.exists(extension => file.getPath.endsWith(extension))

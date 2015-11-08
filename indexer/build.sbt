@@ -56,7 +56,7 @@ initialCommands :=
     |    def request(doc: IndexCandidate):BulkCompatibleDefinition = index into "sources" / "file" fields (
     |      "slug" -> doc.slug,
     |      "project" -> doc.project,
-    |      "filename" -> doc.file.getName,
+    |      "filename" -> doc.path.last,
     |      "imports" -> doc.imports.map { i =>
     |        i.getName.getName
     |      },
