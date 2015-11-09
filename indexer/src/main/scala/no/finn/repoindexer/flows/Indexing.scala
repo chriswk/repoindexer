@@ -1,32 +1,26 @@
 package no.finn.repoindexer.flows
 
 import java.io.File
-import java.nio.file.Paths
+import java.nio.charset.MalformedInputException
 
-import akka.stream.io.Framing
-import akka.util.ByteString
-import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
+import akka.stream.scaladsl._
+import ammonite.ops._
 import com.github.javaparser.JavaParser
-import com.github.javaparser.ast.{Node, ImportDeclaration, CompilationUnit}
+import com.github.javaparser.ast.ImportDeclaration
 import com.sksamuel.elastic4s.streams.RequestBuilder
-import com.sksamuel.elastic4s.{ElasticsearchClientUri, BulkCompatibleDefinition, ElasticClient, ElasticDsl}
-import no.finn.repoindexer.IdxProcess
-import org.reactivestreams.{Publisher, Subscriber}
+import com.sksamuel.elastic4s.{BulkCompatibleDefinition, ElasticClient, ElasticDsl, ElasticsearchClientUri}
+import ElasticDsl._
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import no.finn.repoindexer.IdxProcess._
-import com.sksamuel.elastic4s.streams.ReactiveElastic._
-
 import no.finn.repoindexer._
 import org.apache.logging.log4j.LogManager
+import org.elasticsearch.action.index.IndexResponse
 import org.elasticsearch.common.settings.ImmutableSettings
-import akka.stream.scaladsl._
-import scala.annotation.tailrec
-import scala.util.Try
-import scala.collection.JavaConverters._
 
-import ammonite.ops._
+import scala.collection.JavaConverters._
+import scala.util.Try
+
 object Indexing {
   val config = ConfigFactory.load()
   val log = LogManager.getLogger()
@@ -41,8 +35,9 @@ object Indexing {
     ElasticClient.remote(settings, uri)
   }
   implicit val indexDocumentBuilder = new RequestBuilder[IndexCandidate] {
-    import ElasticDsl._
-    def request(doc: IndexCandidate):BulkCompatibleDefinition = index into "sources" / "file" fields (
+
+
+    def request(doc: IndexCandidate): BulkCompatibleDefinition = index into "sources" / "file" fields(
       "slug" -> doc.slug,
       "project" -> doc.project,
       "filename" -> doc.path.last,
@@ -60,25 +55,27 @@ object Indexing {
         stripSemiColon(tDecl.toString)
       },
       "content" -> doc.content
-    )
+      )
   }
 
   def stripSemiColon(s: String): String = s.replaceAll(";", "")
 
   def pathToUrl(repo: Path): String = ""
 
-  val fileSource : Source[IndexRepo, Unit] = {
+  val fileSource: Source[IndexRepo, Unit] = {
     val localRepo = Path(localRepoFolder)
-    val repoList = ls! localRepo | (repo => IndexRepo(repo, repo.last, pathToUrl(repo)))
+    val repoList = ls ! localRepo | (repo => IndexRepo(repo, repo.last, pathToUrl(repo)))
     Source(repoList.toList)
   }
 
   val indexFilesFlow: Flow[IndexRepo, IndexFile, Unit] = {
     Flow[IndexRepo].map { repo =>
-      (ls.rec! repo.path |? (file => shouldIndexAmmo(file))).toList.map { p =>
+      (ls.rec ! repo.path |? (file => shouldIndexAmmo(file))).toList.map { p =>
         IndexFile(p, repo.slug, repo.path.last)
       }
-    } mapConcat { identity }
+    } mapConcat {
+      identity
+    }
   }
 
   def findFileTypeAmmo(path: Path): IdxProcess = {
@@ -88,10 +85,16 @@ object Indexing {
       OTHER
   }
 
-  val readFilesFlow : Flow[IndexFile, IndexCandidate, Unit] = {
+  val readFilesFlow: Flow[IndexFile, IndexCandidate, Unit] = {
     Flow[IndexFile].map { idxFile =>
-      val content: String = read.lines(idxFile.path).mkString("\n")
-      IndexCandidate(findFileTypeAmmo(idxFile.path), idxFile.slug, idxFile.project, idxFile.path, content)
+      val content = Try {
+        read! idxFile.path
+      }
+      val dataString = content match {
+        case scala.util.Success(d) => d
+        case scala.util.Failure(_) => ""
+      }
+      IndexCandidate(findFileTypeAmmo(idxFile.path), idxFile.slug, idxFile.project, idxFile.path, dataString)
     }
   }
 
@@ -102,6 +105,31 @@ object Indexing {
         case OTHER => candidate
       }
 
+    }
+  }
+  val indexFlow: Flow[IndexCandidate, IndexResponse, Unit] = {
+    Flow[IndexCandidate].mapAsyncUnordered(4) { doc =>
+      client.execute {
+        index into "sources" / "file" fields(
+          "slug" -> doc.slug,
+          "project" -> doc.project,
+          "filename" -> doc.path.last,
+          "extension" -> doc.path.ext,
+          "imports" -> doc.imports.map { i =>
+            i.getName.getName
+          },
+          "fullyQualifiedImport" -> doc.imports.map { i =>
+            stripSemiColon(i.toString)
+          },
+          "package" -> doc.packageName.map(p => p.getName.getName).getOrElse(""),
+          "packageName" -> doc.packageName.map(p => p.getName).getOrElse(""),
+          "fullyQualifiedPackage" -> doc.packageName.map(p => stripSemiColon(p.toString)).getOrElse(""),
+          "types" -> doc.typeDeclarations.map { tDecl =>
+            stripSemiColon(tDecl.toString)
+          },
+          "content" -> doc.content
+          )
+      }
     }
   }
 
@@ -124,7 +152,7 @@ object Indexing {
     repo.replaceAll("ssh---git-git-finn-no-7999-", "").split("-").drop(1).filter(_ != "git").mkString("-")
   }
 
-  def findProject(repo:String) = {
+  def findProject(repo: String) = {
     repo.replaceAll("ssh---git-git-finn-no-7999-", "").split("-").head
   }
 
@@ -140,31 +168,18 @@ object Indexing {
       candidate
     }
   }
+
+
   val fileReadingFlow = fileSource
     .via(indexFilesFlow)
     .via(readFilesFlow)
     .via(enrichJavaFiles)
-  def indexAlreadyCheckedOut() : Unit = {
-    import com.sksamuel.elastic4s.streams.ReactiveElastic._
-    implicit lazy val actorSystem = ActorSystem("FileIndexer")
-    implicit val actorMat = ActorMaterializer()
-    val docPublisher = fileReadingFlow.runWith(Sink.publisher)
-    val esSubscriber = client.subscriber[IndexCandidate]()
-    docPublisher.subscribe(esSubscriber)
-  }
-
-  def runReindex() : Unit = {
-      import com.sksamuel.elastic4s.streams.ReactiveElastic._
-      implicit lazy val actorSystem = ActorSystem("RepoIndexer")
-      implicit val actorMat = ActorMaterializer()
-      val docPublisher: Publisher[IndexCandidate] = fullIndexFlow.runWith(Sink.publisher)
-      val esSubscriber = client.subscriber[IndexCandidate]()
-      docPublisher.subscribe(esSubscriber)
-  }
 
 
   private val includeExtensions = Seq("java", "scala", "xml", "md", "groovy", "gradle", "sbt")
+
   private def shouldIndex(file: File) = includeExtensions.exists(extension => file.getPath.endsWith(extension))
+
   private def shouldIndexAmmo(path: Path) = path.isFile && includeExtensions.contains(path.ext)
 
 

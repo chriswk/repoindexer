@@ -12,7 +12,7 @@ net.virtualvoid.sbt.graph.Plugin.graphSettings
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % akkaVersion,
   "com.typesafe.akka" %% "akka-testkit" % akkaVersion,
-  "com.typesafe.akka" %% "akka-stream-experimental" % "1.0",
+  "com.typesafe.akka" %% "akka-stream-experimental" % "2.0-M1",
   "org.reactivestreams" % "reactive-streams" % "1.0.0",
   "net.ceedubs" %% "ficus" % "1.1.2",
   "com.lihaoyi" %% "ammonite-ops" % "0.4.8",
@@ -29,7 +29,7 @@ libraryDependencies ++= Seq(
   "org.eclipse.jgit" % "org.eclipse.jgit" % "4.0.1.201506240215-r",
   "com.github.javaparser" % "javaparser-core" % "2.2.2",
   "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",
-  "com.typesafe.akka" %% "akka-stream-testkit-experimental" % "1.0" % "test",
+  "com.typesafe.akka" %% "akka-stream-testkit-experimental" % "2.0-M1" % "test",
   "org.scalatest" %% "scalatest" % "2.2.4" % "test"
 ).map(_.exclude("commons-logging", "commons-logging"))
 
