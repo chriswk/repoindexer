@@ -1,7 +1,6 @@
 package no.finn.repoindexer.flows
 
 import java.io.File
-import java.nio.charset.MalformedInputException
 
 import akka.stream.scaladsl._
 import ammonite.ops._
@@ -19,7 +18,7 @@ import org.elasticsearch.action.index.IndexResponse
 import org.elasticsearch.common.settings.ImmutableSettings
 
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 object Indexing {
   val config = ConfigFactory.load()
@@ -71,7 +70,7 @@ object Indexing {
   val indexFilesFlow: Flow[IndexRepo, IndexFile, Unit] = {
     Flow[IndexRepo].map { repo =>
       (ls.rec ! repo.path |? (file => shouldIndexAmmo(file))).toList.map { p =>
-        IndexFile(p, repo.slug, repo.path.last)
+        IndexFile(p, findSlug(repo.slug), repo.path.last)
       }
     } mapConcat {
       identity
@@ -79,7 +78,7 @@ object Indexing {
   }
 
   def findFileTypeAmmo(path: Path): IdxProcess = {
-    if (path.isFile && path.ext == ".java")
+    if (path.isFile && path.ext == "java")
       JAVA
     else
       OTHER

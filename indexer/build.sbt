@@ -74,5 +74,6 @@ initialCommands :=
     |      "content" -> doc.content
     |    )
     |  }
+    |  val summer = Sink.fold[Int, Int](0)(_+_)
 
   """.stripMargin
