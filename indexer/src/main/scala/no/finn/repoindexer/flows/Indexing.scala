@@ -90,8 +90,8 @@ object Indexing {
         read! idxFile.path
       }
       val dataString = content match {
-        case scala.util.Success(d) => d
-        case scala.util.Failure(_) => ""
+        case Success(d) => d
+        case Failure(_) => ""
       }
       IndexCandidate(findFileTypeAmmo(idxFile.path), idxFile.slug, idxFile.project, idxFile.path, dataString)
     }
