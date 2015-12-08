@@ -4,20 +4,22 @@ version := "1.0"
 
 scalaVersion := "2.11.7"
 
-val akkaVersion = "2.4.0"
-val elastic4sVersion = "1.7.4"
+val akkaVersion = "2.4.1"
+val elastic4sVersion = "2.1.0"
 
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % akkaVersion,
   "com.typesafe.akka" %% "akka-testkit" % akkaVersion,
-  "com.typesafe.akka" %% "akka-stream-experimental" % "2.0-M1",
+  "com.typesafe.akka" %% "akka-stream-experimental" % "2.0-M2",
+  "com.typesafe.akka" %% "akka-http-experimental" % "2.0-M2",
+  "com.typesafe.akka" %% "akka-http-core-experimental" % "2.0-M2",
+  "com.typesafe.akka" %% "akka-http-jackson-experimental" % "2.0-M2",
   "org.reactivestreams" % "reactive-streams" % "1.0.0",
   "net.ceedubs" %% "ficus" % "1.1.2",
   "com.lihaoyi" %% "ammonite-ops" % "0.4.8",
   "com.jsuereth" %% "scala-arm" % "1.4",
-  "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",
   "com.sksamuel.elastic4s" %% "elastic4s-core" % elastic4sVersion,
   "com.sksamuel.elastic4s" %% "elastic4s-streams" % elastic4sVersion,
   "com.typesafe" % "config" % "1.3.0",

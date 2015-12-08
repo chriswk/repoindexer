@@ -1,8 +1,11 @@
 package no.finn.repoindexer.flows
 
+import akka.actor.ActorSystem
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.{BasicHttpCredentials, Authorization}
+import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
-import dispatch._
-import Defaults._
+import akka.util.ByteString
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import no.finn.repoindexer._
@@ -10,26 +13,30 @@ import org.apache.logging.log4j.LogManager
 import org.json4s.DefaultFormats
 import org.json4s.jackson.JsonMethods._
 import akka.stream.scaladsl._
-
+import akka.http.scaladsl.Http
+import HttpMethods._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object Stash {
   val config = ConfigFactory.load()
   val stashUsername = config.getString("stash.username")
   val stashPassword = config.getString("stash.password")
-  val stashBaseUrl = url(config.getString("stash.url"))
-  val apiPath = stashBaseUrl / "rest" / "api" / "1.0"
-  val projectsUrl = apiPath / "projects"
+  val stashBaseUrl = config.getString("stash.url")
+  val apiPath = s"${stashBaseUrl}/rest/api/1.0"
+  val projectsUrl = s"${apiPath}/projects"
   val log = LogManager.getLogger()
 
   implicit val formats = DefaultFormats
+  implicit val system = ActorSystem()
+  implicit val materializer = ActorMaterializer()
 
 
-  def stashAuthenticatedRequest(url: Req) = {
-    val req = url.as_!(stashUsername, stashPassword)
-      .setContentType("application/json", "utf-8")
-      .addQueryParameter("limit", "1000")
-    println(s"Requesting ${req.url}")
-    Http(req OK as.String)
+  def stashAuthenticatedRequest(url: String) = {
+    val authorization = BasicHttpCredentials(stashUsername, stashPassword)
+    val req = HttpRequest(GET, uri = url, headers = List(headers.Authorization(authorization)))
+    Http().singleRequest(req)
+          .map(res => res.entity.dataBytes.runFold(ByteString(""))(_ ++ _))
+          .flatMap(bs => bs.map(_.decodeString("ISO8859-1")))
   }
 
   /** Performs the initial query against the base url **/
@@ -43,14 +50,14 @@ object Stash {
   val projectUrlFlow:Flow[List[Project], Project, Unit] = Flow[List[Project]].mapConcat { identity }
 
 
-  val repoReqFlow : Flow[Project, Req, Unit] = Flow[Project].map { project =>
-    apiPath / "projects" / project.key / "repos"
+  val repoReqFlow : Flow[Project, String, Unit] = Flow[Project].map { project =>
+    s"${apiPath}/projects/${project.key}/repos"
   }
 
 
 
-  val repoListFlow : Flow[Req, List[StashRepo], Unit] = Flow[Req].mapAsyncUnordered(2) { r =>
-    println(s"${r.url}")
+  val repoListFlow : Flow[String, List[StashRepo], Unit] = Flow[String].mapAsyncUnordered(2) { r =>
+    println(s"${r}")
     stashAuthenticatedRequest(r)
       .map(parse(_))
       .map(data => data.extract[RepoResponse].values)

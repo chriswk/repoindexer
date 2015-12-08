@@ -7,7 +7,7 @@ import ammonite.ops._
 import com.github.javaparser.JavaParser
 import com.github.javaparser.ast.ImportDeclaration
 import com.sksamuel.elastic4s.streams.RequestBuilder
-import com.sksamuel.elastic4s.{BulkCompatibleDefinition, ElasticClient, ElasticDsl, ElasticsearchClientUri}
+import com.sksamuel.elastic4s._
 import ElasticDsl._
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
@@ -15,7 +15,7 @@ import no.finn.repoindexer.IdxProcess._
 import no.finn.repoindexer._
 import org.apache.logging.log4j.LogManager
 import org.elasticsearch.action.index.IndexResponse
-import org.elasticsearch.common.settings.ImmutableSettings
+import org.elasticsearch.common.settings.Settings
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -28,7 +28,7 @@ object Indexing {
     val cluster = config.as[Option[String]]("es.cluster").getOrElse("elasticsearch")
     val url = config.as[Option[String]]("es.url").getOrElse("localhost")
     val port = config.as[Option[Int]]("es.port").getOrElse(9300)
-    val settings = ImmutableSettings.builder().put("cluster.name", cluster).build()
+    val settings = Settings.builder().put("cluster.name", cluster).build()
     log.info(s"Connecting to ${url}:${port}, cluster: ${cluster}")
     val uri = ElasticsearchClientUri.apply(s"${url}:${port}")
     ElasticClient.remote(settings, uri)
@@ -63,6 +63,7 @@ object Indexing {
 
   val fileSource: Source[IndexRepo, Unit] = {
     val localRepo = Path(localRepoFolder)
+    mkdir! localRepo
     val repoList = ls ! localRepo | (repo => IndexRepo(repo, repo.last, pathToUrl(repo)))
     Source(repoList.toList)
   }
@@ -106,7 +107,7 @@ object Indexing {
 
     }
   }
-  val indexFlow: Flow[IndexCandidate, IndexResponse, Unit] = {
+  val indexFlow: Flow[IndexCandidate, IndexResult, Unit] = {
     Flow[IndexCandidate].mapAsyncUnordered(4) { doc =>
       client.execute {
         index into "sources" / "file" fields(
@@ -175,7 +176,7 @@ object Indexing {
     .via(enrichJavaFiles)
 
 
-  private val includeExtensions = Seq("java", "scala", "xml", "md", "groovy", "gradle", "sbt")
+  private val includeExtensions = Seq("java", "scala", "xml", "md", "groovy", "gradle", "sbt", "ini", "properties")
 
   private def shouldIndex(file: File) = includeExtensions.exists(extension => file.getPath.endsWith(extension))
 
