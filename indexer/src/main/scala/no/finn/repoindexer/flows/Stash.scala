@@ -51,13 +51,12 @@ object Stash {
 
 
   val repoReqFlow : Flow[Project, String, Unit] = Flow[Project].map { project =>
-    s"${apiPath}/projects/${project.key}/repos"
+    s"${apiPath}/projects/${project.key}/repos?limit=500"
   }
 
 
 
   val repoListFlow : Flow[String, List[StashRepo], Unit] = Flow[String].mapAsyncUnordered(2) { r =>
-    println(s"${r}")
     stashAuthenticatedRequest(r)
       .map(parse(_))
       .map(data => data.extract[RepoResponse].values)

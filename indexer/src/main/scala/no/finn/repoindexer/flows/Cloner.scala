@@ -53,7 +53,6 @@ object Cloner {
         Future {
           if (localPath.exists) {
             val git = new Git(new FileRepository(new File(localPath, ".git")))
-            println(s"Pulling ${repo}")
             try {
               git.pull()
                 .setTransportConfigCallback(transportConfig)

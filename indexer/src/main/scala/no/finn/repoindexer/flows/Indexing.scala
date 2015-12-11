@@ -137,7 +137,6 @@ object Indexing {
     .via(Cloner.cloneFlow)
     .via(indexFilesFlow)
     .via(readFilesFlow)
-    .via(enrichJavaFiles)
 
 
   private def findFileType(file: File): IdxProcess = {
