@@ -140,6 +140,8 @@ object Indexing {
     .via(indexFilesFlow)
     .via(readFilesFlow)
 
+  val indexer = fullIndexFlow.via(indexFlow)
+
 
   private def findFileType(file: File): IdxProcess = {
     if (file.isFile() && file.getName().endsWith(".java")) {
