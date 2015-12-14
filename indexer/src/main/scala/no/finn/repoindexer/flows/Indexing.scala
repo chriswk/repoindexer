@@ -1,6 +1,7 @@
 package no.finn.repoindexer.flows
 
 import java.io.File
+import java.time.Instant
 
 import akka.stream.scaladsl._
 import ammonite.ops._
@@ -127,7 +128,8 @@ object Indexing {
           "types" -> doc.typeDeclarations.map { tDecl =>
             stripSemiColon(tDecl.toString)
           },
-          "content" -> doc.content
+          "content" -> doc.content,
+          "added" -> Instant.now
           )
       }
     }
