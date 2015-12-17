@@ -3,6 +3,7 @@ package no.finn.repoindexer.flows
 import java.io.File
 import java.time.Instant
 
+import akka.stream.{FlowShape, Graph}
 import akka.stream.scaladsl._
 import ammonite.ops._
 import com.github.javaparser.JavaParser
@@ -25,6 +26,7 @@ object Indexing {
   val config = ConfigFactory.load()
   val log = LogManager.getLogger()
   val localRepoFolder = config.getString("repo.folder")
+  val localFolder = Path(localRepoFolder)
   val client = {
     val cluster = config.as[Option[String]]("es.cluster").getOrElse("elasticsearch")
     val url = config.as[Option[String]]("es.url").getOrElse("localhost")
@@ -54,7 +56,9 @@ object Indexing {
       "types" -> doc.typeDeclarations.map { tDecl =>
         stripSemiColon(tDecl.toString)
       },
-      "content" -> doc.content
+      "content" -> doc.content,
+      "added" -> Instant.now(),
+      "relativePath" -> doc.path.relativeTo(localFolder)
       )
   }
 
@@ -129,7 +133,8 @@ object Indexing {
             stripSemiColon(tDecl.toString)
           },
           "content" -> doc.content,
-          "added" -> Instant.now
+          "added" -> Instant.now,
+          "relativePath" -> doc.path.relativeTo(localFolder)
           )
       }
     }
@@ -142,6 +147,19 @@ object Indexing {
 
   val indexer = fullIndexFlow.via(indexFlow)
 
+  val indexRepoFlow: Flow[StashRepo, IndexResult, Unit] = {
+    Flow[StashRepo].mapAsyncUnordered(4) { repo =>
+      client.execute {
+        index into "repositories" / "repo" fields(
+          "slug" -> repo.slug,
+          "url" -> repo.cloneUrl
+        )
+      }
+    }
+  }
+
+//  val repoIndexing = Stash.cloneCandidatesFlow.via(indexRepoFlow)
+  val stashRepoIndexing = Stash.repoFlow.via(indexRepoFlow)
 
   private def findFileType(file: File): IdxProcess = {
     if (file.isFile() && file.getName().endsWith(".java")) {
