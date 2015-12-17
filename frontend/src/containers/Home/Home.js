@@ -48,11 +48,12 @@ export default class Home extends Component {
   render() {
     const styles = require('./Home.scss');
     const resultsRendered = this.props.results.map((result) => {
-      const { _source: {filename, content} } = result;
-      return (<tr><td className="col-md-2">{filename}</td><td className="col-md-10">
+      const { _source: {slug, filename, content} } = result;
+      return (<tr><td className="col-md-1">{slug}</td><td className="col-md-1">{filename}</td><td className="col-md-10">
         <pre>{content}</pre>
       </td></tr>);
     });
+
     return (
       <div className={styles.home}>
         <div className="container">
@@ -73,7 +74,8 @@ export default class Home extends Component {
                   <table className="table table-striped">
                     <thead>
                     <tr>
-                      <th className="col-md-2">File</th>
+                      <th className="col-md-1">Slug</th>
+                      <th className="col-md-1">File</th>
                       <th className="col-md-10">Content</th>
                     </tr>
                     </thead>
