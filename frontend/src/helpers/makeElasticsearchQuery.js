@@ -1,11 +1,20 @@
-export default function makeElasticSearchQuery({terms}) {
+export default function makeElasticSearchQuery({filename = '', content = ''}) {
+  const filters = [];
+  if (filename) {
+    filters.push({term: {filename}});
+  }
+  if (content) {
+    filters.push({term: {content}});
+  }
+
   return {
     query: {
-      match: {
-        content: terms || ''
+      bool: {
+        filter: filters
       }
     },
     size: 50,
+    timeout: '3s',
     highlight: {
       fields: {
         _all: {encoder: 'html'}

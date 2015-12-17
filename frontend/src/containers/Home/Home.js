@@ -4,7 +4,7 @@ import {connect} from 'react-redux';
 import {performSearch} from 'redux/modules/search';
 
 function fetchData(getState, dispatch) {
-  return dispatch(performSearch());
+  return dispatch(performSearch({}));
 }
 
 @connectData(fetchData)
@@ -22,8 +22,9 @@ export default class Home extends Component {
   };
 
   search() {
-    const terms = this.refs.search.value;
-    return this.props.performSearch(terms);
+    const filename = this.refs.searchFilename.value;
+    const content = this.refs.searchContent.value;
+    return this.props.performSearch({filename, content});
   }
 
   renderError() {
@@ -63,8 +64,12 @@ export default class Home extends Component {
 
               <form>
                 <div className="form-group">
-                  <label htmlFor="search">Search</label>
-                  <input ref="search" type="text" className="form-control" id="search" onChange={::this.search} placeholder="e.g. filename:*Test*.java" />
+                  <label htmlFor="search">File name</label>
+                  <input ref="searchFilename" type="text" className="form-control" id="search" onChange={::this.search} placeholder="e.g. *Test*.java" />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="search">Content</label>
+                  <input ref="searchContent" type="text" className="form-control" id="search" onChange={::this.search} placeholder="e.g. new HashMap" />
                 </div>
               </form>
 

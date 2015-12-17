@@ -44,9 +44,8 @@ export function isLoaded(globalState) {
   return globalState.search && globalState.search.loaded;
 }
 
-export function performSearch(terms = '') {
-  console.log('perform search', terms);
-  const searchOptions = makeElasticsearchQuery({terms});
+export function performSearch(params) {
+  const searchOptions = makeElasticsearchQuery(params);
 
   return {
     types: [SEARCH, SEARCH_SUCCESS, SEARCH_FAIL],
