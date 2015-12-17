@@ -76,11 +76,13 @@ object Stash {
     }
   }
 
-  val cloneCandidatesFlow = projectListSource
+  val repositoriesFlow = projectListSource
     .via(projectUrlFlow)
     .via(repoReqFlow)
     .via(repoListFlow)
     .via(repoFlow)
+
+  val cloneCandidatesFlow = repositoriesFlow
     .via(cloneFlow)
 
 }

@@ -7,7 +7,7 @@ import akka.stream.{FlowShape, Graph}
 import akka.stream.scaladsl._
 import ammonite.ops._
 import com.github.javaparser.JavaParser
-import com.github.javaparser.ast.ImportDeclaration
+import com.github.javaparser.ast.{CompilationUnit, ImportDeclaration}
 import com.sksamuel.elastic4s.streams.RequestBuilder
 import com.sksamuel.elastic4s._
 import ElasticDsl._
@@ -152,14 +152,15 @@ object Indexing {
       client.execute {
         index into "repositories" / "repo" fields(
           "slug" -> repo.slug,
-          "url" -> repo.cloneUrl
+          "url" -> repo.cloneUrl,
+          "name" -> repo.name
         )
       }
     }
   }
 
 //  val repoIndexing = Stash.cloneCandidatesFlow.via(indexRepoFlow)
-  val stashRepoIndexing = Stash.repoFlow.via(indexRepoFlow)
+  val stashRepoIndexing = Stash.repositoriesFlow.via(indexRepoFlow)
 
   private def findFileType(file: File): IdxProcess = {
     if (file.isFile() && file.getName().endsWith(".java")) {
@@ -170,6 +171,7 @@ object Indexing {
   }
 
   def findSlug(repo: String) = {
+    println(repo)
     repo.replaceAll("ssh---git-git-finn-no-7999-", "").split("-").drop(1).filter(_ != "git").mkString("-")
   }
 
@@ -177,19 +179,36 @@ object Indexing {
     repo.replaceAll("ssh---git-git-finn-no-7999-", "").split("-").head
   }
 
+  def getImports(compilationUnit : CompilationUnit):List[ImportDeclaration] = {
+    if (compilationUnit.getImports != null) {
+      compilationUnit.getImports.asScala.toList
+    } else {
+      List()
+    }
+  }
+
+  def getPackageName(compilationUnit: CompilationUnit) = {
+      Option {
+        compilationUnit.getPackage
+      }
+  }
   private def enrichFromCompilationUnit(file: File, candidate: IndexCandidate): IndexCandidate = {
     Try {
       JavaParser.parse(file)
     } map { compilationUnit =>
-      val imports: List[ImportDeclaration] = compilationUnit.getImports.asScala.toList
-      val types = compilationUnit.getTypes.asScala.toList
-      val packageName = compilationUnit.getPackage
-      candidate.copy(imports = imports, packageName = Some(packageName))
+        val impo = getImports(compilationUnit)
+        val pName = getPackageName(compilationUnit)
+        candidate.copy(imports = impo).copy(packageName = pName)
     } getOrElse {
       candidate
     }
   }
 
+  def createIndex(): Unit = {
+    client.execute {
+
+    }
+  }
 
   val fileReadingFlow = fileSource
     .via(indexFilesFlow)

@@ -5,7 +5,7 @@ version := "1.0"
 scalaVersion := "2.11.7"
 
 val akkaVersion = "2.4.1"
-val elastic4sVersion = "2.1.0"
+val elastic4sVersion = "2.1.1"
 
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
