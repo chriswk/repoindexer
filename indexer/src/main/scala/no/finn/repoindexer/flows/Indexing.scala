@@ -109,7 +109,8 @@ object Indexing {
     },
     "package" -> jc.packageName.map(p => p.getName.getName).getOrElse(""),
     "packageName" -> jc.packageName.map(p => p.getName).getOrElse(""),
-    "types" -> jc.typeDeclarations.map { tDecl => stripSemiColon(tDecl.toString) }
+    "types" -> jc.typeDeclarations.map { tDecl => stripSemiColon(tDecl.toString) },
+    "classname" -> jc.className
     )
   }
 
@@ -185,7 +186,6 @@ object Indexing {
 
   private def enrichFromCompilationUnit(file: File, candidate: IndexCandidate): IndexCandidate = {
     Try {
-      println(s"Parsing ${file}")
       JavaParser.parse(file)
     } map { compilationUnit =>
       val impo = getImports(compilationUnit)
