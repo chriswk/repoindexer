@@ -40,32 +40,32 @@ object Stash {
   }
 
   /** Performs the initial query against the base url **/
-  val projectListSource: Source[List[Project], Unit] = {
+  val projectListSource: Source[List[Project], akka.NotUsed] = {
     val r = stashAuthenticatedRequest(projectsUrl)
       .map(parse(_))
       .map(data => data.extract[ProjectResponse].values)
-    Source(r)
+    Source.fromFuture(r)
   }
 
-  val projectUrlFlow:Flow[List[Project], Project, Unit] = Flow[List[Project]].mapConcat { identity }
+  val projectUrlFlow:Flow[List[Project], Project, akka.NotUsed] = Flow[List[Project]].mapConcat { identity }
 
 
-  val repoReqFlow : Flow[Project, String, Unit] = Flow[Project].map { project =>
+  val repoReqFlow : Flow[Project, String, akka.NotUsed] = Flow[Project].map { project =>
     s"${apiPath}/projects/${project.key}/repos?limit=500"
   }
 
 
 
-  val repoListFlow : Flow[String, List[StashRepo], Unit] = Flow[String].mapAsyncUnordered(2) { r =>
+  val repoListFlow : Flow[String, List[StashRepo], akka.NotUsed] = Flow[String].mapAsyncUnordered(2) { r =>
     stashAuthenticatedRequest(r)
       .map(parse(_))
       .map(data => data.extract[RepoResponse].values)
   }
 
 
-  val repoFlow : Flow[List[StashRepo], StashRepo, Unit] = Flow[List[StashRepo]].mapConcat { identity }
+  val repoFlow : Flow[List[StashRepo], StashRepo, akka.NotUsed] = Flow[List[StashRepo]].mapConcat { identity }
 
-  val cloneFlow : Flow[StashRepo, CloneRepo, Unit] = Flow[StashRepo].map { repo =>
+  val cloneFlow : Flow[StashRepo, CloneRepo, akka.NotUsed] = Flow[StashRepo].map { repo =>
     val url = repo.links("clone").find(l => l.name match {
       case Some(name) => name == "ssh"
       case None => false

@@ -34,7 +34,7 @@ object Indexing {
     val settings = Settings.builder().put("cluster.name", cluster).build()
     log.info(s"Connecting to ${url}:${port}, cluster: ${cluster}")
     val uri = ElasticsearchClientUri.apply(s"${url}:${port}")
-    ElasticClient.remote(settings, uri)
+    ElasticClient.transport(settings, uri)
   }
   implicit val indexDocumentBuilder = new RequestBuilder[IndexCandidate] {
 
@@ -55,14 +55,14 @@ object Indexing {
 
   def pathToUrl(repo: Path): String = ""
 
-  val fileSource: Source[IndexRepo, Unit] = {
+  val fileSource: Source[IndexRepo, akka.NotUsed] = {
     val localRepo = Path(localRepoFolder)
     mkdir ! localRepo
     val repoList = ls ! localRepo | (repo => IndexRepo(repo, repo.last, pathToUrl(repo)))
     Source(repoList.toList)
   }
 
-  val indexFilesFlow: Flow[IndexRepo, IndexFile, Unit] = {
+  val indexFilesFlow: Flow[IndexRepo, IndexFile, akka.NotUsed] = {
     Flow[IndexRepo].map { repo =>
       (ls.rec ! repo.path |? (file => shouldIndexAmmo(file))).toList.map { p =>
         IndexFile(p, findSlug(repo.slug), repo.path.last)
@@ -79,7 +79,7 @@ object Indexing {
       OTHER
   }
 
-  val readFilesFlow: Flow[IndexFile, IndexCandidate, Unit] = {
+  val readFilesFlow: Flow[IndexFile, IndexCandidate, akka.NotUsed] = {
     Flow[IndexFile].map { idxFile =>
       val content = Try {
         read ! idxFile.path
@@ -92,7 +92,7 @@ object Indexing {
     }
   }
 
-  val enrichJavaFiles: Flow[IndexCandidate, IndexCandidate, Unit] = {
+  val enrichJavaFiles: Flow[IndexCandidate, IndexCandidate, akka.NotUsed] = {
     Flow[IndexCandidate].map { candidate =>
       candidate.fileType match {
         case JAVA => enrichFromCompilationUnit(new File(candidate.path.toString), candidate)
@@ -114,7 +114,8 @@ object Indexing {
     )
   }
 
-  val indexFlow: Flow[IndexCandidate, IndexResult, Unit] = {
+
+  val indexFlow: Flow[IndexCandidate, IndexResult, akka.NotUsed] = {
     Flow[IndexCandidate].mapAsyncUnordered(4) { doc =>
       val content = Map(
         "slug" -> doc.slug,
@@ -140,7 +141,7 @@ object Indexing {
 
   val indexer = fullIndexFlow.via(indexFlow)
 
-  val indexRepoFlow: Flow[StashRepo, IndexResult, Unit] = {
+  val indexRepoFlow: Flow[StashRepo, IndexResult, akka.NotUsed] = {
     Flow[StashRepo].mapAsyncUnordered(4) { repo =>
       client.execute {
         index into "repositories" / "repo" fields(
@@ -237,7 +238,7 @@ object Indexing {
 
   val indexWithJava = fileReadingFlow.via(indexFlow)
 
-  private val includeExtensions = Seq("java", "scala", "xml", "md", "groovy", "gradle", "sbt", "ini", "properties")
+  private val includeExtensions = Seq("java", "scala", "xml", "md", "groovy", "gradle", "sbt", "ini", "properties", "md", "txt", "rb", "yaml", "yml", "go", "kt", "json")
 
   private def shouldIndex(file: File) = includeExtensions.exists(extension => file.getPath.endsWith(extension))
 

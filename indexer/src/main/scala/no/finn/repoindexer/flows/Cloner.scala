@@ -46,7 +46,7 @@ object Cloner {
   }
   val sshSessionFactory = new CustomConfigSessionFactory()
 
-  val cloneFlow : Flow[CloneRepo, IndexRepo, Unit] = Flow[CloneRepo].mapAsyncUnordered(4) { repo =>
+  val cloneFlow : Flow[CloneRepo, IndexRepo, akka.NotUsed] = Flow[CloneRepo].mapAsyncUnordered(4) { repo =>
     repo.sshClone match {
       case Some(cloneUrl) => {
         val localPath = new File(localRepoFolder, repo.escapedUrl(cloneUrl))
